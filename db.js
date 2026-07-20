@@ -1903,17 +1903,16 @@ window.addEventListener("DOMContentLoaded", function () {
   }
 
   // ========================================================
-  //   ЮВЕЛИРНАЯ СИСТЕМA ЯКОРНОГО СKPОЛЛA И ПОДСВЕТКИ СТРОК (БЕЗ НАЛОЖЕНИЙ)
+  //   ЮВЕЛИРНАЯ СИСТЕМA ЯКОРНОГО СKPОЛЛA И ПОДСВЕТКИ СТРОК (БРОНЕБОЙНЫЙ ФИНАЛ)
   // ========================================================
   window.highlightAnchorBlock = function() {
-    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Если маяк пустой, равен null или "null" — немедленно выходим!
     if (!window.anchorBlockId || window.anchorBlockId === "null" || window.anchorBlockId === null) {
       return;
     }
 
     let attempts = 0;
-    const currentAnchorId = window.anchorBlockId; // Фиксируем UUID в локальную переменную, чтобы его никто не затер
-    window.anchorBlockId = null; // Сразу сбрасываем глобальный маяк, защищаясь от повторных вызовов
+    const currentAnchorId = window.anchorBlockId;
+    window.anchorBlockId = null;
 
     const checkExist = setInterval(function() {
       attempts++;
@@ -1924,21 +1923,42 @@ window.addEventListener("DOMContentLoaded", function () {
       if (targetLi && container) {
         clearInterval(checkExist);
 
-        // Даем браузеру 120мс завершить все фоновые асинхронные процессы отрисовки
+        // Даем браузеру 150мс на полную стабилизацию вёрстки и высоты страницы
         setTimeout(function() {
-          const containerTop = container.getBoundingClientRect().top;
-          const targetTop = targetLi.getBoundingClientRect().top;
+          // Находим точные координаты строки относительно окна браузера
+          const targetRect = targetLi.getBoundingClientRect();
+          const containerRect = container.getBoundingClientRect();
 
-          // Математически вычисляем центр контейнера
-          const desiredScrollTop = container.scrollTop + (targetTop - containerTop) - (container.clientHeight / 2);
+          // Вычисляем, насколько строка смещена относительно центра видимой области
+          const bias = targetRect.top - containerRect.top - (container.clientHeight / 2) + (targetRect.height / 2);
 
-          // Плавно перемещаем экран строго к строке
+          // Рассчитываем точные точки назначения для всех возможных уровней скролла
+          const targetScrollTop = container.scrollTop + bias;
+          const targetWindowTop = window.scrollY + (targetRect.top - window.innerHeight / 2);
+
+          // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Двигаем ВСЕ возможные точки скролла одновременно!
+          // 1. Двигаем внутренний контейнер контента
           container.scrollTo({
-            top: Math.max(0, desiredScrollTop),
+            top: Math.max(0, targetScrollTop),
             behavior: "smooth"
           });
 
-          // Включаем жёлтую вспышку строго на глазах пользователя
+          // 2. Двигаем общее окно браузера (на случай, если скролл улетел на уровень body)
+          window.scrollTo({
+            top: Math.max(0, targetWindowTop),
+            behavior: "smooth"
+          });
+
+          // 3. Двигаем рамку редактора (дополнительная страховка для мобильных)
+          const editorWrap = document.getElementById("editor");
+          if (editorWrap) {
+            editorWrap.scrollTo({
+              top: Math.max(0, targetScrollTop),
+              behavior: "smooth"
+            });
+          }
+
+          // Зажигаем жёлтую вспышку строго по центру экрана
           setTimeout(function() {
             document.querySelectorAll("#blocks-list li").forEach(el => el.classList.remove("anchor-highlight"));
             targetLi.classList.add("anchor-highlight");
@@ -1946,15 +1966,16 @@ window.addEventListener("DOMContentLoaded", function () {
             setTimeout(function() {
               targetLi.classList.remove("anchor-highlight");
             }, 2000);
-          }, 250); // Вспышка загорится чуть позже, когда экран завершит движение
+          }, 300); // Вспышка включится через 300мс, когда анимация движения точно завершится
 
-        }, 120);
+        }, 150);
 
       } else if (attempts > 40) {
         clearInterval(checkExist);
       }
     }, 50);
   };
+
 
   // ========================================================
   //   ГЛОБАЛЬНЫЕ ГОРЯЧИЕ КЛАВИШИ ДЛЯ ПК (УПРАВЛЕНИЕ ВЫДЕЛЕННОЙ СТРОКОЙ)
