@@ -682,11 +682,15 @@ async function processAndRenderBlocks(pageBlocks) {
 
           if (linkedBlock && linkedBlock.pageId) {
             // Если блок из этой же самой заметки — просто плавно скроллим к нему
+            // Если блок из этой же самой заметки — просто плавно скроллим к нему (ИСПРАВЛЕНО ДЛЯ МОБИЛЬНЫХ)
             if (linkedBlock.pageId === currentPageUUID) {
               window.anchorBlockId = targetBlockId;
-              if (typeof window.highlightAnchorBlock === 'function') window.highlightAnchorBlock();
+              requestAnimationFrame(function() {
+                if (typeof window.highlightAnchorBlock === 'function') window.highlightAnchorBlock();
+              });
               return;
             }
+
 
             // Если блок из ДРУГОЙ заметки — достаем паспорт этой страницы
             const pageTx = db.transaction(["pages"], "readonly");
@@ -847,11 +851,16 @@ async function processAndRenderBlocks(pageBlocks) {
 
   const blockMenu = document.getElementById("block-context-menu");
   if (blockMenu) blockMenu.style.display = "none";
-  // ИСПРАВЛЕНИЕ: Ждем реальной отрисовки HTML-кадра браузером и сразу загружаем тексты
+
+  // ИСПРАВЛЕНИЕ: Ждем отрисовки кадра, разрешаем внешние ссылки и СРАЗУ ЖЕ запускаем маяк скролла и вспышки!
   requestAnimationFrame(function() {
     resolveExternalBlockReferences();
+    if (typeof window.highlightAnchorBlock === 'function') {
+      window.highlightAnchorBlock();
+    }
   });
 } // Конец функции processAndRenderBlocks
+
 
 document.getElementById("btn-journal").addEventListener("click", function () { initApp(); });
 
