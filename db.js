@@ -1564,81 +1564,120 @@ window.addEventListener("DOMContentLoaded", function () {
   });
 
   // ========================================================
-  //   ОКОНЧАТЕЛЬНЫЕ ФУНКЦИИ ВСТАВКИ (БЕЗ ДУБЛИКАТОВ И СБОЕВ)
+  //   АБСОЛЮТНО НАДЕЖНЫЕ ФУНКЦИИ ВСТАВКИ (С УЧЕТОМ СВЕРНУТЫХ ВЕТОК)
   // ========================================================
   window.toolbarInsertAbove = async function(e) {
     if (e) { e.preventDefault(); e.stopPropagation(); }
 
+    // 1. Ищем выделенную строку на экране
     const selectedLi = document.querySelector("#blocks-list li.selected-node");
     if (!selectedLi) return;
 
-    const htmlLines = Array.from(document.querySelectorAll("#blocks-list li"));
-    const actualIndex = htmlLines.indexOf(selectedLi);
-    if (actualIndex === -1) return;
+    // Извлекаем честный UUID выделенного блока
+    const targetBlockId = selectedLi.id.replace("li-block-", "");
+    if (!targetBlockId) return;
 
-    // ИСПРАВЛЕНИЕ: Сразу шифруем пустую строку, чтобы Web Crypto API выдал валидный Hex-код
-    const encryptedEmpty = await encryptText("");
+    // 2. ВЫКАЧИВАЕМ АКТУАЛЬНЫЕ БЛОКИ СТРАНИЦЫ НАПРЯМУЮ ИЗ БАЗЫ (ЗАЩИТА ОТ ZOOM И СВЕРНУТЫХ ВЕТОК)
+    const rawBlocks = [];
+    const tx = db.transaction(["blocks"], "readonly");
+    const store = tx.objectStore("blocks");
 
-    const newBlock = {
-      id: crypto.randomUUID(),
-      pageId: currentPageUUID,
-      content: encryptedEmpty, // Даем честный зашифрованный пустой контент
-      level: allCurrentDecryptedBlocks[actualIndex] ? (allCurrentDecryptedBlocks[actualIndex].level || 0) : 0
+    store.openCursor().onsuccess = function(event) {
+      const cursor = event.target.result;
+      if (cursor) {
+        if (cursor.value.pageId === currentPageUUID) { rawBlocks.push(cursor.value); }
+        cursor.continue();
+      }
     };
 
-    // Вставляем строго на место текущей строки в массиве памяти
-    allCurrentDecryptedBlocks.splice(actualIndex, 0, newBlock);
+    tx.oncomplete = async function() {
+      // Сортируем блоки из базы по их честному текущему порядку
+      rawBlocks.sort((a, b) => (a.order || 0) - (b.order || 0));
 
-    activeBlockId = newBlock.id;
+      // Находим точный индекс выделенного блока в полном массиве базы
+      const databaseIndex = rawBlocks.findIndex(b => b.id === targetBlockId);
+      if (databaseIndex === -1) return;
 
-    // ИСПРАВЛЕНИЕ: Сначала дожидаемся полной записи упорядоченного списка в базу...
-    await reorderAndSaveBlocks(allCurrentDecryptedBlocks);
+      const targetBlock = rawBlocks[databaseIndex];
+      const encryptedEmpty = await encryptText("");
 
-    // ... и только ПОСЛЕ этого чисто обновляем экран из базы данных, без наложений!
-    loadBlocks();
+      // Создаем новый блок на том же уровне вложенности
+      const newBlock = {
+        id: crypto.randomUUID(),
+        pageId: currentPageUUID,
+        content: encryptedEmpty,
+        level: targetBlock.level !== undefined ? targetBlock.level : 0
+      };
+
+      // Вставляем строго перед целевым блоком в честном массиве
+      rawBlocks.splice(databaseIndex, 0, newBlock);
+
+      activeBlockId = newBlock.id;
+
+      // Начисто перенумеровываем всю страницу (10, 20, 30...) и обновляем экран
+      await reorderAndSaveBlocks(rawBlocks);
+      loadBlocks();
+    };
   };
 
   window.toolbarInsertBelow = async function(e) {
     if (e) { e.preventDefault(); e.stopPropagation(); }
 
+    // 1. Ищем выделенную строку на экране
     const selectedLi = document.querySelector("#blocks-list li.selected-node");
     if (!selectedLi) return;
 
-    const htmlLines = Array.from(document.querySelectorAll("#blocks-list li"));
-    const actualIndex = htmlLines.indexOf(selectedLi);
-    if (actualIndex === -1) return;
+    const targetBlockId = selectedLi.id.replace("li-block-", "");
+    if (!targetBlockId) return;
 
-    const currentLevel = allCurrentDecryptedBlocks[actualIndex] ? (allCurrentDecryptedBlocks[actualIndex].level || 0) : 0;
-    let insertAt = actualIndex + 1;
+    // 2. ВЫКАЧИВАЕМ АКТУАЛЬНЫЕ БЛОКИ СТРАНИЦЫ НАПРЯМУЮ ИЗ БАЗЫ
+    const rawBlocks = [];
+    const tx = db.transaction(["blocks"], "readonly");
+    const store = tx.objectStore("blocks");
 
-    if (allCurrentDecryptedBlocks && allCurrentDecryptedBlocks.length > 0) {
-      for (let i = actualIndex + 1; i < allCurrentDecryptedBlocks.length; i++) {
-        if ((allCurrentDecryptedBlocks[i].level || 0) > currentLevel) insertAt++; else break;
+    store.openCursor().onsuccess = function(event) {
+      const cursor = event.target.result;
+      if (cursor) {
+        if (cursor.value.pageId === currentPageUUID) { rawBlocks.push(cursor.value); }
+        cursor.continue();
       }
-    }
-
-    // ИСПРАВЛЕНИЕ: Сразу шифруем пустую строку
-    const encryptedEmpty = await encryptText("");
-
-    const newBlock = {
-      id: crypto.randomUUID(),
-      pageId: currentPageUUID,
-      content: encryptedEmpty, // Даем честный зашифрованный пустой контент
-      level: currentLevel
     };
 
-    // Вставляем после текущей ветки
-    allCurrentDecryptedBlocks.splice(insertAt, 0, newBlock);
+    tx.oncomplete = async function() {
+      rawBlocks.sort((a, b) => (a.order || 0) - (b.order || 0));
 
-    activeBlockId = newBlock.id;
+      const databaseIndex = rawBlocks.findIndex(b => b.id === targetBlockId);
+      if (databaseIndex === -1) return;
 
-    // ИСПРАВЛЕНИЕ: Сначала дожидаемся записи порядка...
-    await reorderAndSaveBlocks(allCurrentDecryptedBlocks);
+      const targetBlock = rawBlocks[databaseIndex];
+      const currentLevel = targetBlock.level !== undefined ? targetBlock.level : 0;
 
-    // ... и чисто обновляем экран из базы
-    loadBlocks();
+      // Ищем, где заканчивается ВСЯ ветка выделенного блока (включая скрытых и свернутых детей)
+      let insertAt = databaseIndex + 1;
+      for (let i = databaseIndex + 1; i < rawBlocks.length; i++) {
+        if ((rawBlocks[i].level || 0) > currentLevel) insertAt++; else break;
+      }
+
+      const encryptedEmpty = await encryptText("");
+
+      // Создаем новый блок на уровне родителя
+      const newBlock = {
+        id: crypto.randomUUID(),
+        pageId: currentPageUUID,
+        content: encryptedEmpty,
+        level: currentLevel
+      };
+
+      // Вставляем строго после родительского блока и всей его вложенной ветки
+      rawBlocks.splice(insertAt, 0, newBlock);
+
+      activeBlockId = newBlock.id;
+
+      // Начисто перенумеровываем всю страницу (10, 20, 30...) и обновляем экран
+      await reorderAndSaveBlocks(rawBlocks);
+      loadBlocks();
+    };
   };
-
 
   bindToolbarButton("btn-toolbar-copy", function (e) {
     e.preventDefault(); const data = getActiveEditorData(); if (!data) return;
