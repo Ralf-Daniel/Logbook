@@ -852,15 +852,15 @@ async function processAndRenderBlocks(pageBlocks) {
   const blockMenu = document.getElementById("block-context-menu");
   if (blockMenu) blockMenu.style.display = "none";
 
-  // ИСПРАВЛЕНИЕ: Ждем отрисовки кадра, разрешаем внешние ссылки и СРАЗУ ЖЕ запускаем маяк скролла и вспышки!
+  // ИСПРАВЛЕНИЕ: Сначала подгружаем все внешние блоки, и ТОЛЬКО ПОТОМ запускаем скролл!
   requestAnimationFrame(function() {
-    resolveExternalBlockReferences();
-    if (typeof window.highlightAnchorBlock === 'function') {
-      window.highlightAnchorBlock();
-    }
+    resolveExternalBlockReferences(function() {
+      if (typeof window.highlightAnchorBlock === 'function') {
+        window.highlightAnchorBlock();
+      }
+    });
   });
 } // Конец функции processAndRenderBlocks
-
 
 document.getElementById("btn-journal").addEventListener("click", function () { initApp(); });
 
@@ -1254,12 +1254,18 @@ document.getElementById("editor").addEventListener("click", async function(e) {
 
 //document.getElementById("btn-focus-out").addEventListener("click", function() { focusedBlockId = null; loadBlocks(); });
 
-// Асинхронное считывание внешних блоков с других страниц
-async function resolveExternalBlockReferences() {
+// Асинхронное считывание внешних блоков с гарантированным отчетом о завершении
+async function resolveExternalBlockReferences(onCompleteCallback) {
   const externalRefs = document.querySelectorAll(".block-ref-external");
-  if (externalRefs.length === 0) return;
+  if (externalRefs.length === 0) {
+    // Если внешних ссылок на странице нет, сразу даем добро на запуск скролла
+    if (typeof onCompleteCallback === 'function') onCompleteCallback();
+    return;
+  }
+
   const transaction = db.transaction(["blocks"], "readonly");
   const store = transaction.objectStore("blocks");
+
   for (const element of externalRefs) {
     const blockId = element.getAttribute("data-block-id");
     try {
@@ -1280,7 +1286,13 @@ async function resolveExternalBlockReferences() {
       } else { element.innerHTML = `⚠️ [Блок не найден]`; }
     } catch (err) {}
   }
+
+  // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Все внешние блоки заменены, высота страницы зафиксирована. Включаем скролл!
+  if (typeof onCompleteCallback === 'function') {
+    onCompleteCallback();
+  }
 }
+
 
 // ПРИВЯЗКА КНОПОК ПАНЕЛИ ИНСТРУМЕНТОВ К ФУНКЦИЯМ СДВИГА И ПЕРЕМЕЩЕНИЯ
 window.addEventListener("DOMContentLoaded", function () {
