@@ -1891,104 +1891,58 @@ window.addEventListener("DOMContentLoaded", function () {
   }
 
   // ========================================================
-  //   ЮВЕЛИРНАЯ СИСТЕМA ЯКОРНОГО СKPОЛЛA И ПОДСВЕТКИ СТРОК
+  //   ЮВЕЛИРНАЯ СИСТЕМA ЯКОРНОГО СKPОЛЛA И ПОДСВЕТКИ СТРОК (БЕЗ НАЛОЖЕНИЙ)
   // ========================================================
-  /* window.highlightAnchorBlock = function() {
-    if (!window.anchorBlockId) return;
-
-    let attempts = 0;
-    const checkExist = setInterval(function() {
-      attempts++;
-
-      // Находим нужную строчку по её честному ID
-      const targetLi = document.getElementById("li-block-" + window.anchorBlockId);
-      const container = document.querySelector(".main-content");
-
-      if (targetLi && container) {
-        clearInterval(checkExist);
-
-        // МAТЕМAТИЧEСКИЙ РAСЧEТ: Вычисляем точное положение строки относительно контейнера
-        const containerTop = container.getBoundingClientRect().top;
-        const targetTop = targetLi.getBoundingClientRect().top;
-
-        // Находим идеальную точку скролла (центрируем строку в поле зрения)
-        const desiredScrollTop = container.scrollTop + (targetTop - containerTop) - (container.clientHeight / 2);
-
-        // Плавно перемещаем контейнер в нужную координату
-        container.scrollTo({
-          top: Math.max(0, desiredScrollTop),
-          behavior: "smooth"
-        });
-
-        // Запускаем вспышку с микропаузой, чтобы она загорелась строго на глазах у пользователя
-        setTimeout(function() {
-          // На всякий случай очищаем старые классы подсветки
-          document.querySelectorAll("#blocks-list li").forEach(el => el.classList.remove("anchor-highlight"));
-
-          targetLi.classList.add("anchor-highlight");
-
-          // Гарантированно убираем вспышку через 2 секунды
-          setTimeout(function() {
-            targetLi.classList.remove("anchor-highlight");
-          }, 2000);
-        }, 150);
-
-        window.anchorBlockId = null;
-      } else if (attempts > 40) { // Держим проверку до 2 секунд, если страница тяжелая
-        clearInterval(checkExist);
-        window.anchorBlockId = null;
-      }
-    }, 50);
-  }; */
-
-  // ШПИОНСКИЙ КОД ДЛЯ ПРОВЕРКИ ЯКОРНОГО СКРОЛЛА
   window.highlightAnchorBlock = function() {
-    if (!window.anchorBlockId) return;
+    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Если маяк пустой, равен null или "null" — немедленно выходим!
+    if (!window.anchorBlockId || window.anchorBlockId === "null" || window.anchorBlockId === null) {
+      return;
+    }
 
     let attempts = 0;
+    const currentAnchorId = window.anchorBlockId; // Фиксируем UUID в локальную переменную, чтобы его никто не затер
+    window.anchorBlockId = null; // Сразу сбрасываем глобальный маяк, защищаясь от повторных вызовов
+
     const checkExist = setInterval(function() {
       attempts++;
 
-      const targetLi = document.getElementById("li-block-" + window.anchorBlockId);
+      const targetLi = document.getElementById("li-block-" + currentAnchorId);
       const container = document.querySelector(".main-content");
 
       if (targetLi && container) {
         clearInterval(checkExist);
 
-        // ВЫВОДИМ ДИАГНОСТИКУ: Что видит код живьем?
-        alert(
-          `🕵️‍♂️ ШПИОН СКРОЛЛА ЗАФИКСИРОВАЛ:\n` +
-          `• Ищем блок с ID: "li-block-${window.anchorBlockId}"\n` +
-          `• Элемент найден в HTML? Да!\n` +
-          `• Текст внутри строки: "${targetLi.innerText.substring(0, 30)}..."\n` +
-          `• Найдена область контента (.main-content)? Да!`
-        );
-
-        const containerTop = container.getBoundingClientRect().top;
-        const targetTop = targetLi.getBoundingClientRect().top;
-        const desiredScrollTop = container.scrollTop + (targetTop - containerTop) - (container.clientHeight / 2);
-
-        container.scrollTo({
-          top: Math.max(0, desiredScrollTop),
-          behavior: "smooth"
-        });
-
+        // Даем браузеру 120мс завершить все фоновые асинхронные процессы отрисовки
         setTimeout(function() {
-          document.querySelectorAll("#blocks-list li").forEach(el => el.classList.remove("anchor-highlight"));
-          targetLi.classList.add("anchor-highlight");
-          setTimeout(function() { targetLi.classList.remove("anchor-highlight"); }, 2000);
-        }, 150);
+          const containerTop = container.getBoundingClientRect().top;
+          const targetTop = targetLi.getBoundingClientRect().top;
 
-        window.anchorBlockId = null;
+          // Математически вычисляем центр контейнера
+          const desiredScrollTop = container.scrollTop + (targetTop - containerTop) - (container.clientHeight / 2);
+
+          // Плавно перемещаем экран строго к строке
+          container.scrollTo({
+            top: Math.max(0, desiredScrollTop),
+            behavior: "smooth"
+          });
+
+          // Включаем жёлтую вспышку строго на глазах пользователя
+          setTimeout(function() {
+            document.querySelectorAll("#blocks-list li").forEach(el => el.classList.remove("anchor-highlight"));
+            targetLi.classList.add("anchor-highlight");
+
+            setTimeout(function() {
+              targetLi.classList.remove("anchor-highlight");
+            }, 2000);
+          }, 250); // Вспышка загорится чуть позже, когда экран завершит движение
+
+        }, 120);
+
       } else if (attempts > 40) {
         clearInterval(checkExist);
-        // Если выскочит это окно — значит, HTML-код строки не успел построиться в базе!
-        alert(`❌ ШПИОН: Блок "li-block-${window.anchorBlockId}" НЕ НАЙДЕН в HTML за 2 секунды!`);
-        window.anchorBlockId = null;
       }
     }, 50);
   };
-
 
   // ========================================================
   //   ГЛОБАЛЬНЫЕ ГОРЯЧИЕ КЛАВИШИ ДЛЯ ПК (УПРАВЛЕНИЕ ВЫДЕЛЕННОЙ СТРОКОЙ)
