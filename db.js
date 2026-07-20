@@ -1903,7 +1903,7 @@ window.addEventListener("DOMContentLoaded", function () {
   }
 
   // ========================================================
-  //   ЮВЕЛИРНАЯ СИСТЕМA ЯКОРНОГО СKPОЛЛA И ПОДСВЕТКИ СТРОК (БРОНЕБОЙНЫЙ ФИНАЛ)
+  //   ЮВЕЛИРНАЯ СИСТЕМA ЯКОРНОГО СKPОЛЛA И ПОДСВЕТКИ СТРОК (ЧИСТОВИК)
   // ========================================================
   window.highlightAnchorBlock = function() {
     if (!window.anchorBlockId || window.anchorBlockId === "null" || window.anchorBlockId === null) {
@@ -1923,59 +1923,38 @@ window.addEventListener("DOMContentLoaded", function () {
       if (targetLi && container) {
         clearInterval(checkExist);
 
-        // Даем браузеру 150мс на полную стабилизацию вёрстки и высоты страницы
+        // Мягкая пауза 100мс, чтобы вёрстка страницы окончательно замерла
         setTimeout(function() {
-          // Находим точные координаты строки относительно окна браузера
           const targetRect = targetLi.getBoundingClientRect();
           const containerRect = container.getBoundingClientRect();
 
-          // Вычисляем, насколько строка смещена относительно центра видимой области
           const bias = targetRect.top - containerRect.top - (container.clientHeight / 2) + (targetRect.height / 2);
-
-          // Рассчитываем точные точки назначения для всех возможных уровней скролла
           const targetScrollTop = container.scrollTop + bias;
-          const targetWindowTop = window.scrollY + (targetRect.top - window.innerHeight / 2);
 
-          // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Двигаем ВСЕ возможные точки скролла одновременно!
-          // 1. Двигаем внутренний контейнер контента
+          // Очищаем старые следы подсветки перед запуском
+          document.querySelectorAll("#blocks-list li").forEach(el => el.classList.remove("anchor-highlight"));
+
+          // Плавно центрируем строку на экране
           container.scrollTo({
             top: Math.max(0, targetScrollTop),
             behavior: "smooth"
           });
 
-          // 2. Двигаем общее окно браузера (на случай, если скролл улетел на уровень body)
-          window.scrollTo({
-            top: Math.max(0, targetWindowTop),
-            behavior: "smooth"
-          });
+          // Включаем исправленную вспышку
+          targetLi.classList.add("anchor-highlight");
 
-          // 3. Двигаем рамку редактора (дополнительная страховка для мобильных)
-          const editorWrap = document.getElementById("editor");
-          if (editorWrap) {
-            editorWrap.scrollTo({
-              top: Math.max(0, targetScrollTop),
-              behavior: "smooth"
-            });
-          }
-
-          // Зажигаем жёлтую вспышку строго по центру экрана
+          // Чисто убираем класс через 2 секунды
           setTimeout(function() {
-            document.querySelectorAll("#blocks-list li").forEach(el => el.classList.remove("anchor-highlight"));
-            targetLi.classList.add("anchor-highlight");
+            targetLi.classList.remove("anchor-highlight");
+          }, 2000);
 
-            setTimeout(function() {
-              targetLi.classList.remove("anchor-highlight");
-            }, 2000);
-          }, 300); // Вспышка включится через 300мс, когда анимация движения точно завершится
-
-        }, 150);
+        }, 100);
 
       } else if (attempts > 40) {
         clearInterval(checkExist);
       }
     }, 50);
   };
-
 
   // ========================================================
   //   ГЛОБАЛЬНЫЕ ГОРЯЧИЕ КЛАВИШИ ДЛЯ ПК (УПРАВЛЕНИЕ ВЫДЕЛЕННОЙ СТРОКОЙ)

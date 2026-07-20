@@ -734,12 +734,12 @@ button:hover {
     color: #2c2c2c !important;
 }
 
-/* КРАСИВАЯ АНИМАЦИЯ ЯКОРНОГО ФОКУСА СТРОКИ */
+/* КРАСИВАЯ АНИМАЦИЯ ЯКОРНОГО ФОКУСА СТРОКИ (ИСПРАВЛЕНО!) */
 @keyframes anchorFlash {
-    0% { background-color: #f7e799; border-radius: 6px; } /* Желтая вспышка */
-    100% { background-color: transparent; } /* Плавное затухание */
+    0% { background-color: #f7e799; border-radius: 6px; }
+    100% { background-color: transparent; }
 }
 
 .anchor-highlight {
-    animation: anchorFlash 2s ease-out-in; /* Эффект длится 2 секунды */
+    animation: anchorFlash 2s ease-out !important; /* Исправлено на классический ease-out */
 }
