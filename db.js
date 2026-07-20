@@ -1890,31 +1890,57 @@ window.addEventListener("DOMContentLoaded", function () {
     }
   }
 
-  // === УМНАЯ СИСТЕМA ЯКОРНОГО СKPОЛЛA И ПОДСВЕТКИ СТРОК С АВТО-ОЖИДАНИЕМ ===
+  // ========================================================
+  //   ЮВЕЛИРНАЯ СИСТЕМA ЯКОРНОГО СKPОЛЛA И ПОДСВЕТКИ СТРОК
+  // ========================================================
   window.highlightAnchorBlock = function() {
     if (!window.anchorBlockId) return;
 
     let attempts = 0;
     const checkExist = setInterval(function() {
       attempts++;
+
+      // Находим нужную строчку по её честному ID
       const targetLi = document.getElementById("li-block-" + window.anchorBlockId);
+      const container = document.querySelector(".main-content");
 
-      if (targetLi) {
+      if (targetLi && container) {
         clearInterval(checkExist);
-        targetLi.scrollIntoView({ behavior: "smooth", block: "center" });
-        targetLi.classList.add("anchor-highlight");
 
+        // МAТЕМAТИЧEСКИЙ РAСЧEТ: Вычисляем точное положение строки относительно контейнера
+        const containerTop = container.getBoundingClientRect().top;
+        const targetTop = targetLi.getBoundingClientRect().top;
+
+        // Находим идеальную точку скролла (центрируем строку в поле зрения)
+        const desiredScrollTop = container.scrollTop + (targetTop - containerTop) - (container.clientHeight / 2);
+
+        // Плавно перемещаем контейнер в нужную координату
+        container.scrollTo({
+          top: Math.max(0, desiredScrollTop),
+          behavior: "smooth"
+        });
+
+        // Запускаем вспышку с микропаузой, чтобы она загорелась строго на глазах у пользователя
         setTimeout(function() {
-          targetLi.classList.remove("anchor-highlight");
-        }, 2000);
+          // На всякий случай очищаем старые классы подсветки
+          document.querySelectorAll("#blocks-list li").forEach(el => el.classList.remove("anchor-highlight"));
+
+          targetLi.classList.add("anchor-highlight");
+
+          // Гарантированно убираем вспышку через 2 секунды
+          setTimeout(function() {
+            targetLi.classList.remove("anchor-highlight");
+          }, 2000);
+        }, 150);
 
         window.anchorBlockId = null;
-      } else if (attempts > 30) {
+      } else if (attempts > 40) { // Держим проверку до 2 секунд, если страница тяжелая
         clearInterval(checkExist);
         window.anchorBlockId = null;
       }
     }, 50);
   };
+
 
   // ========================================================
   //   ГЛОБАЛЬНЫЕ ГОРЯЧИЕ КЛАВИШИ ДЛЯ ПК (УПРАВЛЕНИЕ ВЫДЕЛЕННОЙ СТРОКОЙ)
