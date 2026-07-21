@@ -1,4 +1,4 @@
-const CACHE_NAME = 'logbook-v38';
+const CACHE_NAME = 'logbook-v39';
 // Список файлов, которые телефон должен намертво сохранить в свой кэш:
 const ASSETS = [
   'index.html',

@@ -607,7 +607,7 @@ async function processAndRenderBlocks(pageBlocks) {
 
     // === СВЕТОВАЯ ИЕРАРХИЯ ЦВЕТА (НА УРОВЕНЬ LI) ===
     // Убираем визуальный шум: шаг 12%, порог 40% (не светлее цвета цитат)
-    const opacityStep = 0.12;
+    const opacityStep = 0.18;
     const minOpacity = 0.40;
     const currentOpacity = Math.max(minOpacity, 1 - (visualLevel * opacityStep));
 
@@ -949,14 +949,18 @@ function parseMarkdown(text) {
       processedText = '<hr style="border: 0; border-top: 1px solid #e3e2dc; margin: 10px 0;">';
     }
 
-    // 3. РЕНДЕРИНГ MARKDOWN ЧЕРЕЗ MARKED.JS С ПОДДЕРЖКОЙ СТАНДАРТА GFM (ЗАЧЕРКИВАНИЕ + КОД)
+    // 3. РЕНДЕРИНГ MARKDOWN ЧЕРЕЗ MARKED.JS — ПОЛНОСТЬЮ ИСПРАВЛЕНО (УЛЬТИМАТИВНЫЙ ВАРИАНТ)
     let html = "";
-    const parseOptions = { gfm: true, breaks: true };
+
+    // Принудительно выставляем глобальные настройки для библиотеки Marked
+    if (typeof marked.setOptions === 'function') {
+      marked.setOptions({ gfm: true, breaks: true });
+    }
 
     if (processedText.includes('\n')) {
-      html = marked.parse(processedText, parseOptions);
+      html = marked.parse(processedText);
     } else {
-      html = marked.parse(processedText, parseOptions).trim().replace(/^<p>|<\/p>$/g, '');
+      html = marked.parse(processedText).trim().replace(/^<p>|<\/p>$/g, '');
     }
 
     // 4. ПОДДЕРЖКА ССЫЛОК НА БЛОКИ ((uuid)) — СВЕРХСТРОГАЯ ПРОВЕРКА ДЕФИСОВ
