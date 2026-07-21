@@ -599,13 +599,22 @@ async function processAndRenderBlocks(pageBlocks) {
 
     const li = document.createElement("li");
 
-    // Безопасная проверка, чтобы ReferenceError больше никогда не появлялся:
     if (typeof block !== 'undefined' && block && block.id) {
       li.id = "li-block-" + block.id;
     }
-    // На мобилках делаем шаг вложенности компактным (14px), а на ПК оставляем аккуратные 22px
     const stepSize = window.innerWidth <= 768 ? 14 : 22;
     li.style.paddingLeft = (visualLevel * stepSize) + "px";
+
+    // === СВЕТОВАЯ ИЕРАРХИЯ ЦВЕТА (НА УРОВЕНЬ LI) ===
+    // Убираем визуальный шум: шаг 12%, порог 40% (не светлее цвета цитат)
+    const opacityStep = 0.12;
+    const minOpacity = 0.40;
+    const currentOpacity = Math.max(minOpacity, 1 - (visualLevel * opacityStep));
+
+    // Применяем прозрачность ко всей строке целиком
+    li.style.opacity = currentOpacity;
+    // ========================================================
+
 
     // Создание профессионального графического буллета в стиле Logseq
     const bulletSpan = document.createElement("span");
