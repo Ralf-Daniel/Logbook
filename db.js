@@ -949,19 +949,27 @@ function parseMarkdown(text) {
       processedText = '<hr style="border: 0; border-top: 1px solid #e3e2dc; margin: 10px 0;">';
     }
 
-    // 3. РЕНДЕРИНГ MARKDOWN ЧЕРЕЗ MARKED.JS — ПОЛНОСТЬЮ ИСПРАВЛЕНО (УЛЬТИМАТИВНЫЙ ВАРИАНТ)
+    // 3. РЕНДЕРИНГ MARKDOWN ЧЕРЕЗ MARKED.JS — ПОЛНОСТЬЮ АВТОНОМНО (ИСПРАВЛЕНО!)
     let html = "";
 
-    // Принудительно выставляем глобальные настройки для библиотеки Marked
-    if (typeof marked.setOptions === 'function') {
-      marked.setOptions({ gfm: true, breaks: true });
+    try {
+      // ИСПРАВЛЕНИЕ: Используем современный метод .use() для активации стандартов GitHub (GFM)
+      if (typeof marked.use === 'function') {
+        marked.use({ gfm: true, breaks: true });
+      }
+    } catch (e) {
+      console.warn("Метод marked.use не поддерживается вашей версией библиотеки");
     }
 
+    // Дополнительно страхуем передачу параметров напрямую в сам парсер
+    const parseOptions = { gfm: true, breaks: true };
+
     if (processedText.includes('\n')) {
-      html = marked.parse(processedText);
+      html = marked.parse(processedText, parseOptions);
     } else {
-      html = marked.parse(processedText).trim().replace(/^<p>|<\/p>$/g, '');
+      html = marked.parse(processedText, parseOptions).trim().replace(/^<p>|<\/p>$/g, '');
     }
+
 
     // 4. ПОДДЕРЖКА ССЫЛОК НА БЛОКИ ((uuid)) — СВЕРХСТРОГАЯ ПРОВЕРКА ДЕФИСОВ
     html = html.replace(/\(\(([^)]+)\)\)/gi, function (match, innerContent) {
