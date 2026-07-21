@@ -949,26 +949,19 @@ function parseMarkdown(text) {
       processedText = '<hr style="border: 0; border-top: 1px solid #e3e2dc; margin: 10px 0;">';
     }
 
-    // 3. РЕНДЕРИНГ MARKDOWN ЧЕРЕЗ MARKED.JS — ПОЛНОСТЬЮ АВТОНОМНО (ИСПРАВЛЕНО!)
+    // 3. РЕНДЕРИНГ MARKDOWN ЧЕРЕЗ СТАБИЛЬНУЮ БИБЛИОТЕКУ MARKDOWN-IT (АВТОНОМНО)
     let html = "";
 
-    try {
-      // ИСПРАВЛЕНИЕ: Используем современный метод .use() для активации стандартов GitHub (GFM)
-      if (typeof marked.use === 'function') {
-        marked.use({ gfm: true, breaks: true });
-      }
-    } catch (e) {
-      console.warn("Метод marked.use не поддерживается вашей версией библиотеки");
-    }
-
-    // Дополнительно страхуем передачу параметров напрямую в сам парсер
-    const parseOptions = { gfm: true, breaks: true };
+    // Инициализируем парсер с включенной поддержкой автоссылок и переносов строк
+    const md = window.markdownit({ html: true, linkify: true, breaks: true });
 
     if (processedText.includes('\n')) {
-      html = marked.parse(processedText, parseOptions);
+      html = md.render(processedText);
     } else {
-      html = marked.parse(processedText, parseOptions).trim().replace(/^<p>|<\/p>$/g, '');
+      // Для одиночных строк убираем лишние оборачивающие теги <p>, как и раньше
+      html = md.render(processedText).trim().replace(/^<p>|<\/p>$/g, '');
     }
+
 
 
     // 4. ПОДДЕРЖКА ССЫЛОК НА БЛОКИ ((uuid)) — СВЕРХСТРОГАЯ ПРОВЕРКА ДЕФИСОВ
