@@ -646,6 +646,18 @@ async function processAndRenderBlocks(pageBlocks) {
     textSpan.style.display = "inline-block";
     textSpan.style.minHeight = "24px";
 
+    // === СВЕТОВАЯ ИЕРАРХИЯ ЦВЕТА ТЕКСТА (УБИРАЕМ ВИЗУАЛЬНЫЙ ШУМ) ===
+    // visualLevel равен 0 для корневых блоков и ВСЕГДА сбрасывается в 0 для главного блока в режиме Zoom!
+    // Мы плавно уменьшаем непрозрачность (opacity) на 12% с каждым шагом вложенности.
+    // Ограничиваем падение на уровне 5-го шага (минимальная видимость текста — 40%)
+    const opacityStep = 0.12;
+    const minOpacity = 0.40;
+    const currentOpacity = Math.max(minOpacity, 1 - (visualLevel * opacityStep));
+
+    // Применяем вычисленную прозрачность к тексту блока
+    textSpan.style.opacity = currentOpacity;
+    // ===============================================================
+
     let touchTimer = null;
 
     // Одиночный клик для выделения строки + УМНЫЙ ЯКОРНЫЙ ПЕРЕХОД ПО ССЫЛКАМ
