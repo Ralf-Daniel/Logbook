@@ -955,14 +955,19 @@ function parseMarkdown(text) {
 
     // ===========================================
 
-    // 3. РЕНДЕРИНГ MARKDOWN ЧЕРЕЗ MARKED.JS — ПОЛНОСТЬЮ ИСПРАВЛЕНО
-    // Больше не проверяем одиночную черту |, чтобы ссылки-псевдонимы не превращались в таблицы!
+    // 3. РЕНДЕРИНГ MARKDOWN ЧЕРЕЗ MARKED.JS — ПОЛНОСТЬЮ ИСПРАВЛЕНО (РАСШИРЕНО!)
     let html = "";
+
+    // Включаем поддержку GFM (GitHub Flavored Markdown), которая нативно активирует ~~зачеркивание~~,
+    // таблицы, автоссылки и правильную обработку блоков кода с тремя обратными кавычками ```
+    const parseOptions = { gfm: true, breaks: true };
+
     if (processedText.includes('\n')) {
-      html = marked.parse(processedText);
+      html = marked.parse(processedText, parseOptions);
     } else {
-      html = marked.parse(processedText).trim().replace(/^<p>|<\/p>$/g, '');
+      html = marked.parse(processedText, parseOptions).trim().replace(/^<p>|<\/p>$/g, '');
     }
+
 
     // 4. ПОДДЕРЖКА ССЫЛОК НА БЛОКИ ((uuid)) — СВЕРХСТРОГАЯ ПРОВЕРКА ДЕФИСОВ
     html = html.replace(/\(\(([^)]+)\)\)/gi, function (match, innerContent) {
