@@ -659,12 +659,12 @@ async function processAndRenderBlocks(pageBlocks) {
     // visualLevel равен 0 для корневых блоков и ВСЕГДА сбрасывается в 0 для главного блока в режиме Zoom!
     // Мы плавно уменьшаем непрозрачность (opacity) на 12% с каждым шагом вложенности.
     // Ограничиваем падение на уровне 5-го шага (минимальная видимость текста — 40%)
-    const opacityStep = 0.12;
-    const minOpacity = 0.40;
-    const currentOpacity = Math.max(minOpacity, 1 - (visualLevel * opacityStep));
+    // const opacityStep = 0.12;
+    // const minOpacity = 0.40;
+    // const currentOpacity = Math.max(minOpacity, 1 - (visualLevel * opacityStep));
 
     // Применяем вычисленную прозрачность к тексту блока
-    textSpan.style.opacity = currentOpacity;
+    // textSpan.style.opacity = currentOpacity;
     // ===============================================================
 
     let touchTimer = null;
@@ -904,8 +904,7 @@ document.getElementById("btn-create-page").addEventListener("click", function ()
 });
 
 
-// Надежный парсер Markdown и Вики-ссылок [[Страница|псевдоним]]
-// Полностью исправленный парсер Markdown и Вики-ссылок с псевдонимами
+// НАДЕЖНЫЙ ПАРСЕР MARKDOWN С ПОДДЕРЖКОЙ КРАСИВЫХ БЛОКОВ КОДА И ЗАЧЕРКИВАНИЯ
 function parseMarkdown(text) {
   if (!text || text.trim() === "") return `<span style="display:inline-block; width:100%; min-height:24px;">&nbsp;</span>`;
   try {
@@ -920,9 +919,8 @@ function parseMarkdown(text) {
     processedText = processedText.replace(/\[\[(.*?)\]\]/g, function (match, innerContent) {
       if (innerContent.includes('|')) {
         const parts = innerContent.split('|');
-        // Используем методы массивов вместо квадратных скобок, чтобы чат их не стёр!
-        const pageName = parts.shift().trim(); // Забираем первый элемент
-        const aliasName = parts.pop().trim();  // Забираем последний элемент
+        const pageName = parts.shift().trim();
+        const aliasName = parts.pop().trim();
         return `<a href="#" class="page-link" data-page="${pageName}">${aliasName}</a>`;
       } else {
         return `<a href="#" class="page-link" data-page="${innerContent.trim()}">${innerContent.trim()}</a>`;
@@ -934,8 +932,6 @@ function parseMarkdown(text) {
       return `<a href="#" class="page-link" data-page="${tagName}">#${tagName}</a>`;
     });
 
-    // === НОВЫЕ ПРАВИЛА МАКСИМАЛЬНОГО MARKDOWN ===
-
     // А. Поддержка чекбоксов [ ] и [x] (Списки задач)
     processedText = processedText.replace(/^\[ \]\s(.*)/g, '<input type="checkbox" disabled style="margin-right: 8px; vertical-align: middle;">$1');
     processedText = processedText.replace(/^\[x\]\s(.*)/g, '<input type="checkbox" checked disabled style="margin-right: 8px; vertical-align: middle;"><s>$1</s>');
@@ -943,7 +939,7 @@ function parseMarkdown(text) {
     // Б. Поддержка выделения текста маркером ==текст==
     processedText = processedText.replace(/==([^=]+)==/g, '<mark style="background-color: #f7e799; padding: 2px 4px; border-radius: 4px; color: #1a1a1a;">$1</mark>');
 
-    // В. Поддержка цитат > текст
+    // В. Поддержка цитат > text
     if (processedText.startsWith('>')) {
       processedText = processedText.replace(/^>\s?(.*)/g, '<blockquote style="margin: 4px 0; padding-left: 12px; border-left: 3px solid #acaba4; color: #7c7c77; font-style: italic;">$1</blockquote>');
     }
@@ -953,13 +949,8 @@ function parseMarkdown(text) {
       processedText = '<hr style="border: 0; border-top: 1px solid #e3e2dc; margin: 10px 0;">';
     }
 
-    // ===========================================
-
-    // 3. РЕНДЕРИНГ MARKDOWN ЧЕРЕЗ MARKED.JS — ПОЛНОСТЬЮ ИСПРАВЛЕНО (РАСШИРЕНО!)
+    // 3. РЕНДЕРИНГ MARKDOWN ЧЕРЕЗ MARKED.JS С ПОДДЕРЖКОЙ СТАНДАРТА GFM (ЗАЧЕРКИВАНИЕ + КОД)
     let html = "";
-
-    // Включаем поддержку GFM (GitHub Flavored Markdown), которая нативно активирует ~~зачеркивание~~,
-    // таблицы, автоссылки и правильную обработку блоков кода с тремя обратными кавычками ```
     const parseOptions = { gfm: true, breaks: true };
 
     if (processedText.includes('\n')) {
@@ -967,7 +958,6 @@ function parseMarkdown(text) {
     } else {
       html = marked.parse(processedText, parseOptions).trim().replace(/^<p>|<\/p>$/g, '');
     }
-
 
     // 4. ПОДДЕРЖКА ССЫЛОК НА БЛОКИ ((uuid)) — СВЕРХСТРОГАЯ ПРОВЕРКА ДЕФИСОВ
     html = html.replace(/\(\(([^)]+)\)\)/gi, function (match, innerContent) {
@@ -979,8 +969,6 @@ function parseMarkdown(text) {
         alias = parts.pop().trim();
       }
 
-      // ЖЕСТКИЙ ФИЛЬТР: Проверяем, что это честный 36-символьный UUID с дефисами.
-      // Если это дата (10 символов) или обычный текст — возвращаем как есть, ничего не ломая!
       if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(blockId)) {
         return match;
       }
@@ -998,7 +986,7 @@ function parseMarkdown(text) {
     console.error("Ошибка парсинга Markdown:", error);
     return text;
   }
-}
+} // Функция parseMarkdown железобетонно закрывается здесь!
 
 // 1. УНИВЕРСАЛЬНЫЙ МОБИЛЬНЫЙ ЭКСПОРТ (КОПИРОВАНИЕ БЭКАПА В БУФЕР)
 function exportData() {
