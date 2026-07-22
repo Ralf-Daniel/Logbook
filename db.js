@@ -2145,5 +2145,145 @@ window.addEventListener("DOMContentLoaded", function () {
       }
     }
   });
+  // ========================================================
+  //   ИНТЕЛЛЕКТУАЛЬНЫЙ МОДУЛЬ КАЛЕНДАРЯ (БЕЗОПАСНЫЙ И АВТОНОМНЫЙ)
+  // ========================================================
+  let calCurrentDate = new Date(); // Переменная для отслеживания листания месяцев
 
+  // 1. Привязываем открытие окна к нашей новой кнопке на панели
+  const btnJournal = document.getElementById("btn-journal");
+  const calModal = document.getElementById("calendar-modal");
+
+  if (btnJournal && calModal) {
+    btnJournal.onclick = function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      calCurrentDate = new Date(); // При каждом открытии сбрасываем на текущий месяц
+      openCalendar();
+    };
+  }
+
+  // 2. Функция открытия и инициализации данных из базы
+  function openCalendar() {
+    if (!calModal) return;
+    calModal.style.display = "flex";
+
+    const activePagesList = [];
+    const tx = db.transaction(["pages"], "readonly");
+    const store = tx.objectStore("pages");
+
+    // Выкачиваем паспорта страниц журналов для подсветки дней
+    store.openCursor().onsuccess = function(event) {
+      const cursor = event.target.result;
+      if (cursor) {
+        if (cursor.value.type === "journal") {
+          activePagesList.push(cursor.value);
+        }
+        cursor.continue();
+      }
+    };
+
+    tx.oncomplete = async function() {
+      const decryptedDates = [];
+      for (let p of activePagesList) {
+        try {
+          const clearDate = await decryptText(p.title);
+          if (clearDate && /^\d{4}-\d{2}-\d{2}$/.test(clearDate.trim())) {
+            decryptedDates.push(clearDate.trim());
+          }
+        } catch(e) {}
+      }
+      // Рендерим сетку месяца, передавая список расшифрованных дат
+      renderCalendarGrid(decryptedDates);
+    };
+  }
+
+  // 3. Главная функция генерации сетки календаря
+  function renderCalendarGrid(existingDates) {
+    const monthTitle = document.getElementById("cal-month-title");
+    const yearSelect = document.getElementById("cal-year-select");
+    const daysGrid = document.getElementById("calendar-days-grid");
+    if (!monthTitle || !yearSelect || !daysGrid) return;
+
+    daysGrid.innerHTML = "";
+
+    const year = calCurrentDate.getFullYear();
+    const month = calCurrentDate.getMonth();
+
+    // Заполняем выпадающий список годов (от текущего - 5 лет до + 5 лет)
+    yearSelect.innerHTML = "";
+    for (let y = year - 5; y <= year + 5; y++) {
+      const opt = document.createElement("option");
+      opt.value = y; opt.innerText = y;
+      if (y === year) opt.selected = true;
+      yearSelect.appendChild(opt);
+    }
+    // Быстрый перескок года при выборе из списка
+    yearSelect.onchange = function() {
+      calCurrentDate.setFullYear(parseInt(yearSelect.value));
+      openCalendar();
+    };
+
+    const monthsRu = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"];
+    monthTitle.innerText = monthsRu[month];
+
+    // Вычисляем первый день месяца и количество дней в нем
+    const firstDayIndex = new Date(year, month, 1).getDay();
+    const totalDays = new Date(year, month + 1, 0).getDate();
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    // Рисуем пустые ячейки для сдвига дней недели
+    for (let i = 0; i < firstDayIndex; i++) {
+      const emptyDiv = document.createElement("div");
+      emptyDiv.className = "empty-day";
+      daysGrid.appendChild(emptyDiv);
+    }
+
+    // Цикл генерации дней месяца
+    for (let day = 1; day <= totalDays; day++) {
+      const dayDiv = document.createElement("div");
+      dayDiv.innerText = day;
+
+      // Формируем строгий ISO формат даты для проверки в базе (ГГГГ-ММ-ДД)
+      const currentCellDateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
+      // Если в этот день есть запись — красим в нежно-голубой цвет
+      if (existingDates.includes(currentCellDateStr)) {
+        dayDiv.classList.add("has-entry");
+      }
+
+      // Если это сегодняшний день на календаре — добавляем рамку
+      if (currentCellDateStr === todayStr) {
+        dayDiv.classList.add("is-today-cell");
+      }
+
+      // КЛИК ПО ДНЮ: Открывает или создает журнальную страницу на эту дату!
+      dayDiv.onclick = function() {
+        if (calModal) calModal.style.display = "none";
+        // Запускаем наш главный, отлаженный конвейер переключения страниц
+        checkAndCreateJournalPage(currentCellDateStr);
+      };
+
+      daysGrid.appendChild(dayDiv);
+    }
+  }
+
+  // 4. Настраиваем кнопки управления в окне календаря
+  const btnPrev = document.getElementById("cal-prev-month");
+  const btnNext = document.getElementById("cal-next-month");
+  if (btnPrev) btnPrev.onclick = function() { calCurrentDate.setMonth(calCurrentDate.getMonth() - 1); openCalendar(); };
+  if (btnNext) btnNext.onclick = function() { calCurrentDate.setMonth(calCurrentDate.getMonth() + 1); openCalendar(); };
+
+  const btnToday = document.getElementById("cal-btn-today");
+  const btnClose = document.getElementById("cal-btn-close");
+  if (btnToday) btnToday.onclick = function() { calCurrentDate = new Date(); openCalendar(); };
+  if (btnClose) btnClose.onclick = function() { if (calModal) calModal.style.display = "none"; };
+
+  // Закрытие окна по клику на полупрозрачный фон за его пределами
+  if (calModal) {
+    calModal.onclick = function(e) {
+      if (e.target === calModal) calModal.style.display = "none";
+    };
+  }
+  // ========================================================
 }); // Финальное закрытие DOMContentLoaded
