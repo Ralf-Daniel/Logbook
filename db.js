@@ -13,6 +13,24 @@ let navigationHistoryBack = [];    // Массив для истории "Наз
 let navigationHistoryForward = []; // Массив для истории "Вперед"
 let isNavigatingViaButtons = false; // Специальный флаг, чтобы история не зацикливалась сама на себя
 
+// ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ КРАСИВОГО ФОРМАТА ДАТЫ (Wed. 2026-07-22)
+function formatJournalTitle(dateStr) {
+  // Проверяем, что строка вообще похожа на дату ГГГГ-ММ-ДД
+  if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr.trim())) return dateStr;
+
+  try {
+    const dateObj = new Date(dateStr.trim());
+    if (isNaN(dateObj.getTime())) return dateStr; // Защита от кривых дат
+
+    // Получаем сокращенный день недели на английском (Mon, Tue, Wed...)
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const dayName = days[dateObj.getDay()];
+
+    return `${dayName}. ${dateStr.trim()}`;
+  } catch (e) {
+    return dateStr;
+  }
+}
 
 // Запуск базы данных IndexedDB
 const request = indexedDB.open("LogbookDB", 1);
@@ -69,7 +87,7 @@ async function checkAndCreateJournalPage(dateStr) {
         writeTx.objectStore("pages").add(newJournal);
 
         writeTx.oncomplete = async function() {
-          document.getElementById("page-title").innerText = dateStr;
+          document.getElementById("page-title").innerText = formatJournalTitle(dateStr);
           currentPageUUID = newJournal.id;
 
           const encryptedEmptyContent = await encryptText("");
@@ -89,7 +107,7 @@ async function checkAndCreateJournalPage(dateStr) {
           updateTx.objectStore("pages").put(journalPage);
         }
 
-        document.getElementById("page-title").innerText = dateStr;
+        document.getElementById("page-title").innerText = formatJournalTitle(dateStr);
         currentPageUUID = journalPage.id;
         loadPagesList();
         loadBlocks();
@@ -212,7 +230,11 @@ function loadPagesList() {
       li.innerText = pageTitleText;
 
       li.addEventListener("click", function () {
-        document.getElementById("page-title").innerText = pageTitleText;
+        // ИСПРАВЛЕНИЕ: Отрезаем иконки-префиксы 📅 и 📄 перед форматированием заголовка
+        const cleanTitle = pageTitleText.replace(/^[📅📄]\s*/, "");
+        const isJournalItem = pageTitleText.startsWith("📅") || clickedPageObj?.type === "journal";
+
+        document.getElementById("page-title").innerText = isJournalItem ? formatJournalTitle(cleanTitle) : cleanTitle;
         currentPageUUID = pageId;
         focusedBlockId = null;
 
@@ -273,8 +295,9 @@ function loadPagesList() {
         const isJournal = (foundPage.type && foundPage.type.trim() === "journal");
         const prefix = isJournal ? "📅 " : "📄 ";
 
-        // Добавляем элемент в список
-        listRecent.appendChild(createSidebarItem(foundPage.id, prefix + foundPage.title));
+        // ИСПРАВЛЕНИЕ: Если это журнал, прогоняем заголовок через наш красивый формат
+        const displayTitle = isJournal ? formatJournalTitle(foundPage.title) : foundPage.title;
+        listRecent.appendChild(createSidebarItem(foundPage.id, prefix + displayTitle));
       }
     });
 
