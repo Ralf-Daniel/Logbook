@@ -49,7 +49,8 @@
             <!-- ЛЕВАЯ БОКОВАЯ ПАНЕЛЬ -->
             <aside class="sidebar">
                 <h2>Logbook</h2>
-                <button id="btn-journal">📅 Журнал</button>
+                <!-- ИСПРАВЛЕННАЯ КНОПКА КАЛЕНДАРЯ -->
+                <button id="btn-journal" title="Открыть календарь заметок">📅 Календарь</button>
 
                 <div class="create-page-area" style="margin-top: 15px; margin-bottom: 15px; display: flex; gap: 5px;">
                     <input type="text" id="new-page-input" placeholder="Новая страница..." style="width: 100%; padding: 5px; box-sizing: border-box;">
@@ -211,5 +212,27 @@
         </div>
 
         <script src="db.js"></script>
+
+        <!-- ВСПЛЫВАЮЩЕЕ ОКНО ИНТЕРАКТИВНОГО КАЛЕНДАРЯ -->
+        <div id="calendar-modal" class="modal-overlay" style="display: none;">
+          <div class="calendar-card">
+            <div class="calendar-header">
+              <button id="cal-prev-month">◀</button>
+              <div class="calendar-title-wrap">
+                <span id="cal-month-title">Июль</span>
+                <select id="cal-year-select"></select>
+              </div>
+              <button id="cal-next-month">▶</button>
+            </div>
+            <div class="calendar-weekdays">
+              <div>Вс</div><div>Пн</div><div>Вт</div><div>Ср</div><div>Чт</div><div>Пт</div><div>Сб</div>
+            </div>
+            <div id="calendar-days-grid" class="calendar-days"></div>
+            <div class="calendar-footer">
+              <button id="cal-btn-today">Сегодня</button>
+              <button id="cal-btn-close">Закрыть</button>
+            </div>
+          </div>
+        </div>
     </body>
 </html>
