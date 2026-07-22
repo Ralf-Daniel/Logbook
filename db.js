@@ -304,9 +304,9 @@ function loadPagesList() {
     }
 
     // 2. Выводим Журналы
-    journalPages.forEach(p => {
-      listJournals.appendChild(createSidebarItem(p.id, p.title));
-    });
+    // journalPages.forEach(p => {
+    //  listJournals.appendChild(createSidebarItem(p.id, p.title));
+    // });
 
     // 3. Выводим Заметки
     notePages.forEach(p => {
@@ -1465,7 +1465,7 @@ window.addEventListener("DOMContentLoaded", function () {
   } // Вот теперь функция закрывается строго здесь!
 
   // ЛОГИКА СВОРAЧИВАНИЯ РАЗДЕЛОВ САЙДБАРА
-  const sectionHeaders = ["header-recent", "header-journals", "header-notes", "header-tags"];
+  const sectionHeaders = ["header-recent", "header-notes", "header-tags"];
   sectionHeaders.forEach(id => {
     const header = document.getElementById(id);
     if (header) {
