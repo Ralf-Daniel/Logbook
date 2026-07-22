@@ -139,19 +139,17 @@ async function createCustomPage(pageName) {
   };
 }
 
-// НОВАЯ ИСПРАВЛЕННАЯ ФУНКЦИЯ ДЛЯ РАЗДЕЛЕНИЯ СТРАНИЦ ПО ПОЛОЧКАМ
 function loadPagesList() {
-  // Находим все наши новые списки на экране
+  // Находим активные списки на экране (ИСПРАВЛЕНО: убрали listJournals)
   const listRecent = document.getElementById("list-recent");
-  const listJournals = document.getElementById("list-journals");
   const listNotes = document.getElementById("list-notes");
   const listTags = document.getElementById("list-tags");
 
-  if (!listRecent || !listJournals || !listNotes || !listTags) return;
+  // Защита: если списки не найдены в HTML, останавливаемся, чтобы не ломать скрипт
+  if (!listRecent || !listNotes || !listTags) return;
 
   // Очищаем все списки перед новой отрисовкой
   listRecent.innerHTML = "";
-  listJournals.innerHTML = "";
   listNotes.innerHTML = "";
   listTags.innerHTML = "";
 
@@ -160,7 +158,7 @@ function loadPagesList() {
   const blocksStore = transaction.objectStore("blocks");
 
   let allPagesList = [];
-  let allDatabaseBlocks = [];
+  let tagsSearchBlocks = [];
   let pageIdToDelete = null;
 
   // Шаг 1: Выкачиваем все страницы из базы
@@ -172,28 +170,23 @@ function loadPagesList() {
     }
   };
 
-  // Шаг 2: Выкачиваем все блоки (они нужны нам, чтобы вытащить Хэштеги/Теги!)
-  // СТАНЕТ:
-  let tagsSearchBlocks = []; // Создаем отдельный изолированный массив только для тегов
+  // Шаг 2: Выкачиваем все блоки для сбора хэштегов
   blocksStore.openCursor().onsuccess = function (event) {
     const cursor = event.target.result;
     if (cursor) {
-      tagsSearchBlocks.push(cursor.value); // Собираем блоки сюда
+      tagsSearchBlocks.push(cursor.value);
       cursor.continue();
     }
   };
 
-
-  // Шаг 3: Когда все данные загружены в память, распределяем их
+  // Шаг 3: Когда все данные загружены в память, распределяем их по спискам
   transaction.oncomplete = async function() {
-
-    // А. Сначала соберем все УНИКАЛЬНЫЕ ТЕГИ из содержимого блоков
+    // А. Собираем уникальные теги из содержимого блоков
     let uniqueTags = new Set();
     for (let block of tagsSearchBlocks) {
       try {
         const decryptedContent = await decryptText(block.content);
         if (decryptedContent) {
-          // Ищем слова, начинающиеся с #
           const matches = decryptedContent.match(/#([a-zA-Zа-яА-Я0-9_ёЁ]+)/g);
           if (matches) {
             matches.forEach(tag => uniqueTags.add(tag.replace("#", "").trim()));
@@ -202,135 +195,113 @@ function loadPagesList() {
       } catch (e) {}
     }
 
-    // Превращаем теги в массив и сортируем по алфавиту
     let sortedTags = Array.from(uniqueTags).sort((a, b) => a.localeCompare(b));
 
-    // СТАНЕТ:
     // Б. Расшифровываем заголовки страниц
     let decryptedPages = [];
     for (let p of allPagesList) {
       const clearTitle = await decryptText(p.title);
-
-      // Проверяем, является ли эта страница тегом (есть ли такое слово среди найденных тегов)
       const isThisATag = sortedTags.includes(clearTitle.trim());
       let finalType = p.type;
-      if (isThisATag) finalType = "tag"; // Маркируем как тег в памяти
-
+      if (isThisATag) finalType = "tag";
       decryptedPages.push({ id: p.id, title: clearTitle, type: finalType });
     }
 
-    // Сортируем списки по алфавиту с учетом тегов
-    let journalPages = decryptedPages.filter(p => p.type === "journal").sort((a, b) => a.title.localeCompare(b.title));
-    // В "Заметки" пускаем только то, что НЕ журнал и НЕ тег!
+    // Фильтруем обычные заметки (НЕ журналы и НЕ теги)
     let notePages = decryptedPages.filter(p => p.type !== "journal" && p.type !== "tag").sort((a, b) => a.title.localeCompare(b.title));
 
-    // Вспомогательная функция для создания кликабельной строчки в сайдбаре (ИСПРАВЛЕНО!)
-        function createSidebarItem(pageId, pageTitleText) {
-          const li = document.createElement("li");
-          li.innerText = pageTitleText;
+    // Вспомогательная функция для создания кликабельной строчки в сайдбаре
+    function createSidebarItem(pageId, pageTitleText) {
+      const li = document.createElement("li");
+      li.innerText = pageTitleText;
 
-          li.addEventListener("click", function () {
-            currentPageUUID = pageId;
-            focusedBlockId = null;
+      li.addEventListener("click", function () {
+        currentPageUUID = pageId;
+        focusedBlockId = null;
 
-            // ИСПРАВЛЕНИЕ: Используем безопасные коды Юникода, защищаясь от черных ромбов ''
-            // \u{1F4C5} — это 📅, \u{1F4C4} — это 📄
-            const cleanTitle = pageTitleText.replace(/^[\u{1F4C5}\u{1F4C4}]\s*/u, "");
-            const isJournalItem = pageTitleText.startsWith("📅") || pageTitleText.startsWith("\u{1F4C5}");
+        // ИСПРАВЛЕНИЕ: Юникод-очистка от префиксов (📅 и 📝)
+        const cleanTitle = pageTitleText.replace(/^[\u{1F4C5}\u{1F4C4}📝]\s*/u, "");
+        const isJournalItem = pageTitleText.startsWith("📅") || pageTitleText.startsWith("\u{1F4C5}");
 
-            // Выводим правильный заголовок на экран
-            document.getElementById("page-title").innerText = isJournalItem ? formatJournalTitle(cleanTitle) : cleanTitle;
+        document.getElementById("page-title").innerText = isJournalItem ? formatJournalTitle(cleanTitle) : cleanTitle;
 
-            // Добавляем страницу в список "Последние" (если её там еще нет)
-            if (!recentPages.includes(pageId)) {
-              recentPages.unshift(pageId);
-              if (recentPages.length > 5) recentPages.pop();
-            } else {
-              recentPages = recentPages.filter(id => id !== pageId);
-              recentPages.unshift(pageId);
-            }
-
-            loadBlocks();
-            loadPagesList(); // Перерисовываем сайдбар, чтобы обновить блок "Последние"
-
-            // Закрываем сайдбар на мобилках
-            if (window.innerWidth <= 768) {
-              const mobileSidebar = document.querySelector(".sidebar");
-              const mobileOverlay = document.getElementById("sidebar-overlay");
-              if (mobileSidebar && mobileOverlay) {
-                mobileSidebar.classList.remove("mobile-open");
-                mobileOverlay.classList.remove("mobile-open");
-              }
-            }
-          });
-
-          // Кастомное контекстное меню для удаления (вызывается правой кнопкой мыши)
-          li.addEventListener("contextmenu", function (e) {
-            e.preventDefault();
-            e.stopPropagation();
-            pageIdToDelete = pageId;
-            const menu = document.getElementById("context-menu");
-            if (menu) {
-              menu.style.display = "block";
-              menu.style.left = e.pageX + "px";
-              menu.style.top = e.pageY + "px";
-            }
-          });
-
-          return li;
+        if (!recentPages.includes(pageId)) {
+          recentPages.unshift(pageId);
+          if (recentPages.length > 5) recentPages.pop();
+        } else {
+          recentPages = recentPages.filter(id => id !== pageId);
+          recentPages.unshift(pageId);
         }
 
-    // ВЫВОДИМ ДАННЫЕ НА ЭКРАН ПО РАЗДЕЛАМ:
+        loadBlocks();
+        loadPagesList();
 
-    // 1. Выводим Последние заметки
-    // СТАНЕТ (Умная и безопасная отрисовка последних заметок):
-    // 1. Выводим Последние заметки
+        if (window.innerWidth <= 768) {
+          const mobileSidebar = document.querySelector(".sidebar");
+          const mobileOverlay = document.getElementById("sidebar-overlay");
+          if (mobileSidebar && mobileOverlay) {
+            mobileSidebar.classList.remove("mobile-open");
+            mobileOverlay.classList.remove("mobile-open");
+          }
+        }
+      });
+
+      // Контекстное меню для удаления страницы (правый клик / долгий тап)
+      li.addEventListener("contextmenu", function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        pageIdToDelete = pageId;
+        const menu = document.getElementById("context-menu");
+        if (menu) {
+          menu.style.display = "block";
+          menu.style.left = e.pageX + "px";
+          menu.style.top = e.pageY + "px";
+        }
+      });
+
+      return li;
+    }
+
+    // === ВЫВОД ДАННЫХ НА ЭКРАН ПО РАЗДЕЛАМ ===
+
+    // 1. Отрисовка Последних заметок
     recentPages.forEach(id => {
       const foundPage = decryptedPages.find(p => p.id === id);
       if (foundPage) {
-        // Если тип четко равен journal — ставим календарь, во всех остальных случаях — документ
         const isJournal = (foundPage.type && foundPage.type.trim() === "journal");
         const prefix = isJournal ? "📅 " : "📄 ";
-
-        // ИСПРАВЛЕНИЕ: Если это журнал, прогоняем заголовок через наш красивый формат
         const displayTitle = isJournal ? formatJournalTitle(foundPage.title) : foundPage.title;
         listRecent.appendChild(createSidebarItem(foundPage.id, prefix + displayTitle));
       }
     });
 
-    // Если последних нет — пишем заглушку
     if (recentPages.length === 0) {
       listRecent.innerHTML = "<li style='font-style:italic; color:#acaba4; pointer-events:none; font-size:12px;'>Пусто ⏳</li>";
     }
 
-    // 2. Выводим Журналы
-    // journalPages.forEach(p => {
-    //  listJournals.appendChild(createSidebarItem(p.id, p.title));
-    // });
-
-    // 3. Выводим Заметки
+    // 3. Отрисовка Обычных Заметок (ИСПРАВЛЕНО: добавили префикс 📝)
     notePages.forEach(p => {
-      listNotes.appendChild(createSidebarItem(p.id, p.title));
+      listNotes.appendChild(createSidebarItem(p.id, "📝 " + p.title));
     });
 
-    // 4. Выводим Теги
+    // 4. Отрисовка Тегов (ИСПРАВЛЕНО: добавили иконку 🏷️ и привязали тип tag)
     sortedTags.forEach(tag => {
-      const li = document.createElement("li");
-      //li.id = "li-block-" + block.id; // Присваиваем строке её честный ID для якорных ссылок
-      li.innerText = "#" + tag;
-      li.addEventListener("click", function() {
-        // При клике на тег — создаем или открываем страницу с именем этого тега (как в Logseq!)
+      const itemLi = createSidebarItem(tag, "🏷️ " + tag);
+
+      // Переопределяем клик по тегу для вызова главного конвейера
+      itemLi.onclick = function() {
         checkAndCreatePage(tag, "tag");
-      });
-      listTags.appendChild(li);
+      };
+
+      listTags.appendChild(itemLi);
     });
-    // Если тегов нет — пишем заглушку
+
     if (sortedTags.length === 0) {
       listTags.innerHTML = "<li style='font-style:italic; color:#acaba4; pointer-events:none; font-size:12px;'>Нет тегов 🏷️</li>";
     }
   };
 
-  // Привязка удаления страницы к кнопке из контекстного меню (оставляем твой оригинальный рабочий код)
+  // Слушатель кнопки удаления из контекстного меню
   const deleteBtn = document.getElementById("btn-delete-page");
   if (deleteBtn) {
     deleteBtn.onclick = async function(e) {
@@ -350,12 +321,9 @@ function loadPagesList() {
         if (pageData) {
           const pageTitleText = await decryptText(pageData.title);
           if (confirm(`Вы уверены, что хотите полностью удалить страницу "${pageTitleText}" и все её зашифрованные записи?`)) {
-            // Удаляем из списка последних, если она там была
             recentPages = recentPages.filter(id => id !== pageIdToDelete);
-
             const pageTx = db.transaction(["pages"], "readwrite");
             pageTx.objectStore("pages").delete(pageIdToDelete);
-
             pageTx.oncomplete = function() {
               const blockTx = db.transaction(["blocks"], "readwrite");
               const blockStore = blockTx.objectStore("blocks");
@@ -370,12 +338,18 @@ function loadPagesList() {
                 }
               };
             };
-          } else { pageIdToDelete = null; }
+          } else {
+            pageIdToDelete = null;
+          }
         }
-      } catch (err) { console.error("Ошибка удаления:", err); pageIdToDelete = null; }
+      } catch (err) {
+        console.error("Ошибка удаления:", err);
+        pageIdToDelete = null;
+      }
     };
   }
-}
+} // Функция loadPagesList окончательно закрывается здесь!
+
 
 // ЖЕЛЕЗОБЕТОННАЯ ПЕРЕНУМЕРАЦИЯ С ВОЗВРАТОМ ЧИСТОГО МАССИВА
 async function reorderAndSaveBlocks(blocksArray) {
