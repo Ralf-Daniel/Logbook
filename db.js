@@ -224,64 +224,61 @@ function loadPagesList() {
     // В "Заметки" пускаем только то, что НЕ журнал и НЕ тег!
     let notePages = decryptedPages.filter(p => p.type !== "journal" && p.type !== "tag").sort((a, b) => a.title.localeCompare(b.title));
 
-    // Вспомогательная функция для создания кликабельной строчки в сайдбаре
-    function createSidebarItem(pageId, pageTitleText) {
-      const li = document.createElement("li");
-      li.innerText = pageTitleText;
+    // Вспомогательная функция для создания кликабельной строчки в сайдбаре (ИСПРАВЛЕНО!)
+        function createSidebarItem(pageId, pageTitleText) {
+          const li = document.createElement("li");
+          li.innerText = pageTitleText;
 
-      li.addEventListener("click", function () {
-        // ИСПРАВЛЕНИЕ: Отрезаем иконки-префиксы 📅 и 📄 перед форматированием заголовка
-        const cleanTitle = pageTitleText.replace(/^[📅📄]\s*/, "");
-        const isJournalItem = pageTitleText.startsWith("📅") || clickedPageObj?.type === "journal";
+          li.addEventListener("click", function () {
+            currentPageUUID = pageId;
+            focusedBlockId = null;
 
-        document.getElementById("page-title").innerText = isJournalItem ? formatJournalTitle(cleanTitle) : cleanTitle;
-        currentPageUUID = pageId;
-        focusedBlockId = null;
+            // ИСПРАВЛЕНИЕ: Используем безопасные коды Юникода, защищаясь от черных ромбов ''
+            // \u{1F4C5} — это 📅, \u{1F4C4} — это 📄
+            const cleanTitle = pageTitleText.replace(/^[\u{1F4C5}\u{1F4C4}]\s*/u, "");
+            const isJournalItem = pageTitleText.startsWith("📅") || pageTitleText.startsWith("\u{1F4C5}");
 
-        // СТАНЕТ:
-        // Добавляем страницу в список "Последние" (если это НЕ тег и её там еще нет)
-        const clickedPageObj = decryptedPages.find(p => p.id === pageId);
-        const isTagClick = clickedPageObj && clickedPageObj.type === "tag";
+            // Выводим правильный заголовок на экран
+            document.getElementById("page-title").innerText = isJournalItem ? formatJournalTitle(cleanTitle) : cleanTitle;
 
-        if (!isTagClick) {
-          if (!recentPages.includes(pageId)) {
-            recentPages.unshift(pageId);
-            if (recentPages.length > 5) recentPages.pop();
-          } else {
-            recentPages = recentPages.filter(id => id !== pageId);
-            recentPages.unshift(pageId);
-          }
+            // Добавляем страницу в список "Последние" (если её там еще нет)
+            if (!recentPages.includes(pageId)) {
+              recentPages.unshift(pageId);
+              if (recentPages.length > 5) recentPages.pop();
+            } else {
+              recentPages = recentPages.filter(id => id !== pageId);
+              recentPages.unshift(pageId);
+            }
+
+            loadBlocks();
+            loadPagesList(); // Перерисовываем сайдбар, чтобы обновить блок "Последние"
+
+            // Закрываем сайдбар на мобилках
+            if (window.innerWidth <= 768) {
+              const mobileSidebar = document.querySelector(".sidebar");
+              const mobileOverlay = document.getElementById("sidebar-overlay");
+              if (mobileSidebar && mobileOverlay) {
+                mobileSidebar.classList.remove("mobile-open");
+                mobileOverlay.classList.remove("mobile-open");
+              }
+            }
+          });
+
+          // Кастомное контекстное меню для удаления (вызывается правой кнопкой мыши)
+          li.addEventListener("contextmenu", function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            pageIdToDelete = pageId;
+            const menu = document.getElementById("context-menu");
+            if (menu) {
+              menu.style.display = "block";
+              menu.style.left = e.pageX + "px";
+              menu.style.top = e.pageY + "px";
+            }
+          });
+
+          return li;
         }
-
-        loadBlocks();
-        loadPagesList(); // Перерисовываем сайдбар, чтобы обновить блок "Последние"
-
-        // Закрываем сайдбар на мобилках
-        if (window.innerWidth <= 768) {
-          const mobileSidebar = document.querySelector(".sidebar");
-          const mobileOverlay = document.getElementById("sidebar-overlay");
-          if (mobileSidebar && mobileOverlay) {
-            mobileSidebar.classList.remove("mobile-open");
-            mobileOverlay.classList.remove("mobile-open");
-          }
-        }
-      });
-
-      // Кастомное контекстное меню для удаления (вызывается правой кнопкой мыши)
-      li.addEventListener("contextmenu", function (e) {
-        e.preventDefault();
-        e.stopPropagation();
-        pageIdToDelete = pageId;
-        const menu = document.getElementById("context-menu");
-        if (menu) {
-          menu.style.display = "block";
-          menu.style.left = e.pageX + "px";
-          menu.style.top = e.pageY + "px";
-        }
-      });
-
-      return li;
-    }
 
     // ВЫВОДИМ ДАННЫЕ НА ЭКРАН ПО РАЗДЕЛАМ:
 
