@@ -1227,7 +1227,10 @@ async function checkAndCreatePage(pageName, type = "page") {
 
       // ФИНАЛЬНЫЙ ВAРИAНТ: Считываем тип строго из паспорта страницы в базе данных
       if (foundPage) {
-        document.getElementById("page-title").innerText = pageName;
+        // ИСПРАВЛЕНИЕ: Если открываемая страница является журналом, принудительно добавляем день недели!
+        const isJournalType = foundPage.type === "journal" || /^\d{4}-\d{2}-\d{2}$/.test(pageName.trim());
+        document.getElementById("page-title").innerText = isJournalType ? formatJournalTitle(pageName) : pageName;
+
         currentPageUUID = foundPage.id;
 
         // 1. Проверяем честный тип страницы, который записан в базе данных, или знак хэштега
