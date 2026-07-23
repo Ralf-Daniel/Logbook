@@ -926,9 +926,13 @@ function parseMarkdown(text) {
       return `<a href="#" class="page-link" data-page="${tagName}">#${tagName}</a>`;
     });
 
-    // А. Поддержка чекбоксов [ ] и [x] (Списки задач)
-    processedText = processedText.replace(/^\[ \]\s(.*)/g, '<input type="checkbox" disabled style="margin-right: 8px; vertical-align: middle;">$1');
-    processedText = processedText.replace(/^\[x\]\s(.*)/g, '<input type="checkbox" checked disabled style="margin-right: 8px; vertical-align: middle;"><s>$1</s>');
+    // А. РАСШИРЕННАЯ ПОДДЕРЖКА СТАТУСОВ ЗАДАЧ (TODO -> DOING -> DONE -> CANCELED)
+    // Вместо неповоротливых тегов <input> создаем стильные интерактивные спаны с классом task-badge
+    processedText = processedText.replace(/^\[ \]\s(.*)/g, '<span class="task-badge task-todo" title="TODO (Надо сделать)"></span>$1');
+    processedText = processedText.replace(/^\[\/\]\s(.*)/g, '<span class="task-badge task-doing" title="DOING (Выполняется)"></span>$1');
+    processedText = processedText.replace(/^\[x\]\s(.*)/g, '<span class="task-badge task-done" title="DONE (Выполнено)"></span><del class="task-muted">$1</del>');
+    processedText = processedText.replace(/^\[-\]\s(.*)/g, '<span class="task-badge task-canceled" title="CANCELED (Отменено)"></span><del class="task-muted">$1</del>');
+
 
     // Б. Поддержка выделения текста маркером ==текст==
     processedText = processedText.replace(/==([^=]+)==/g, '<mark style="background-color: #f7e799; padding: 2px 4px; border-radius: 4px; color: #1a1a1a;">$1</mark>');
