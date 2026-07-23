@@ -2241,7 +2241,25 @@ window.addEventListener("DOMContentLoaded", function () {
     monthTitle.innerText = monthsRu[month];
 
     // Вычисляем первый день месяца и количество дней в нем
-    const firstDayIndex = new Date(year, month, 1).getDay();
+
+    // ИСПРАВЛЕНИЕ: Вычисляем первый день месяца с учетом того, что неделя начинается с ПОНЕДЕЛЬНИКА
+    let firstDayIndex = new Date(year, month, 1).getDay();
+
+    // Если первый день месяца — Воскресенье (0), превращаем его в 6 (сдвиг для конца недели).
+    // Для всех остальных дней (1-6) просто вычитаем 1, чтобы Понедельник стал 0, Вторник 1 и т.д.
+    let shiftIndex = firstDayIndex === 0 ? 6 : firstDayIndex - 1;
+
+    const totalDays = new Date(year, month + 1, 0).getDate();
+    const todayStr = new Date().toISOString().split('T');
+
+    // Рисуем пустые ячейки для сдвига дней недели на Понедельник
+    for (let i = 0; i < shiftIndex; i++) {
+      const emptyDiv = document.createElement("div");
+      emptyDiv.className = "empty-day";
+      daysGrid.appendChild(emptyDiv);
+    }
+
+    /* const firstDayIndex = new Date(year, month, 1).getDay();
     const totalDays = new Date(year, month + 1, 0).getDate();
     const todayStr = new Date().toISOString().split('T')[0];
 
@@ -2250,7 +2268,7 @@ window.addEventListener("DOMContentLoaded", function () {
       const emptyDiv = document.createElement("div");
       emptyDiv.className = "empty-day";
       daysGrid.appendChild(emptyDiv);
-    }
+      } */
 
     // Цикл генерации дней месяца
     for (let day = 1; day <= totalDays; day++) {
