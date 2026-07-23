@@ -1,11 +1,13 @@
-const CACHE_NAME = 'logbook-v52';
+const CACHE_NAME = 'logbook-v53';
 // Список файлов, которые телефон должен намертво сохранить в свой кэш:
 const ASSETS = [
   'index.html',
   'styles.css',
   'db.js',
   'markdown-it.min.js',
-  'manifest.json'
+  'manifest.json',
+  'Comfortaa.woff2',      // Добавили шрифт просмотра
+  'IBM-Plex-Mono.woff2'    // Добавили шрифт редактора
 ];
 
 // 1. Событие установки: скачиваем все файлы в кэш устройства

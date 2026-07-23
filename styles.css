@@ -1,12 +1,42 @@
+/* ПОДКЛЮЧЕНИЕ АВТОНОМНЫХ ШРИФТОВ */
+@font-face {
+    font-family: 'Comfortaa';
+    src: url('Comfortaa.woff2') format('woff2');
+    font-weight: normal;
+    font-style: normal;
+}
+@font-face {
+    font-family: 'IBM Plex Mono';
+    src: url('IBM-Plex_Mono.woff2') format('woff2');
+    font-weight: normal;
+    font-style: normal;
+}
+
 /* === БАЗОВЫЕ СТИЛИ (КНИЖНЫЙ МИНИМАЛИЗМ) === */
 body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    /*font-family: Comfortaa, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;*/
     margin: 0;
     padding: 0;
     height: 100vh;
     background-color: #fcfbfa; /* Мягкий, теплый бумажный цвет */
     color: #2c2c2c; /* Графитовый вместо жесткого черного */
     -webkit-tap-highlight-color: transparent;
+}
+
+/* 1. РЕЖИМ ПРОСМОТРА (ОСНОВНОЙ ШРИФТ ПРИЛОЖЕНИЯ) */
+body, .sidebar, #page-title, #blocks-list li span {
+    font-family: 'Comfortaa', cursive, sans-serif !important;
+    font-size: 15px; /* У Comfortaa буквы чуть крупнее, 15px будет идеально */
+    line-height: 1.6;
+}
+
+/* 2. РЕЖИМ РЕДАКТИРОВАНИЯ (БРОНЕБОЙНЫЙ МОНОШРИФТ ИЗ INTELIJ IDEA) */
+#editor textarea, .edit-textarea, #blocks-list textarea {
+    font-family: 'IBM-Plex-Mono', 'JetBrains Mono', 'Anonymous Pro', monospace !important;
+    font-size: 14px !important;
+    line-height: 1.5 !important;
+    font-weight: normal !important; /* Намертво убираем ложную жирность кириллицы! */
+    color: #1a1a1a !important;
 }
 
 .app-container {
@@ -367,7 +397,7 @@ body {
     outline: none;
     background-color: #f5f4f0;
     /* Указываем системе использовать только моноширинные шрифты: */
-    font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, Courier, monospace !important;
+    /*font-family: IBM-Plex-Mono, SFMono-Regular, Consolas, "Liberation Mono", Menlo, Courier, monospace !important;*/
     color: #2c2c2c;
     box-shadow: inset 0 1px 2px rgba(0,0,0,0.05);
     letter-spacing: -0.2px; /* Чуть сблизим буковки для аккуратности */
