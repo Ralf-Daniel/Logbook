@@ -658,6 +658,7 @@ async function processAndRenderBlocks(pageBlocks) {
       if (e.target.classList.contains("task-badge")) {
         e.preventDefault();
         e.stopPropagation();
+        e.stopImmediatePropagation();
 
         let currentText = block.content;
         let newText = currentText;
@@ -1275,7 +1276,13 @@ async function checkAndCreatePage(pageName, type = "page") {
 
 // Клик по пустому фону редактора (ИСПРАВЛЕНО!)
 // Клик по пустому фону редактора (ПОЛНОСТЬЮ ИСПРАВЛЕНО ДЛЯ НИЖНЕЙ ПАНЕЛИ)
-document.getElementById("editor").addEventListener("click", async function(e) {
+document.getElementById("editor").addEventListener("click", async function (e) {
+
+  // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Если кликнули по значку задачи, мгновенно выходим и ничего не ломаем!
+  if (e.target.classList.contains("task-badge")) {
+    return;
+  }
+
   // Если клик произошел внутри нижней панели инструментов, СРАЗУ выходим и ничего не ломаем!
   if (e.target.closest("#wysiwyg-toolbar")) return;
 
