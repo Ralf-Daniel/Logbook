@@ -649,26 +649,54 @@ async function processAndRenderBlocks(pageBlocks) {
     textSpan.style.display = "inline-block";
     textSpan.style.minHeight = "24px";
 
-    // === СВЕТОВАЯ ИЕРАРХИЯ ЦВЕТА ТЕКСТА (УБИРАЕМ ВИЗУАЛЬНЫЙ ШУМ) ===
-    // visualLevel равен 0 для корневых блоков и ВСЕГДА сбрасывается в 0 для главного блока в режиме Zoom!
-    // Мы плавно уменьшаем непрозрачность (opacity) на 12% с каждым шагом вложенности.
-    // Ограничиваем падение на уровне 5-го шага (минимальная видимость текста — 40%)
-    // const opacityStep = 0.12;
-    // const minOpacity = 0.40;
-    // const currentOpacity = Math.max(minOpacity, 1 - (visualLevel * opacityStep));
-
-    // Применяем вычисленную прозрачность к тексту блока
-    // textSpan.style.opacity = currentOpacity;
-    // ===============================================================
-
     let touchTimer = null;
 
     // Одиночный клик для выделения строки + УМНЫЙ ЯКОРНЫЙ ПЕРЕХОД ПО ССЫЛКАМ
     textSpan.addEventListener("click", function (e) {
 
-      // === НАШ ВРЕМЕННЫЙ СВЕРХ-ШПИОН НА ВХОДЕ ===
-      //alert(`Клик зафиксирован! \nНажали на тег: <${e.target.tagName.toLowerCase()}> \nКлассы элемента: "${e.target.className}" \nID из data-id: "${e.target.getAttribute("data-id")}"`);
-      // ==========================================
+      // === ЖИВОЙ ПЕРЕКЛЮЧАТЕЛЬ СТАТУСОВ ЗАДАЧ (TODO -> DOING -> DONE -> CANCELED) ===
+      if (e.target.classList.contains("task-badge")) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        let currentText = block.content;
+        let newText = currentText;
+
+        // ЮВЕЛИРНАЯ ЗАМЕНА СИМВОЛОВ СТАТУСА ПО КРУГУ
+        if (currentText.startsWith("[ ] ")) {
+          newText = currentText.replace("[ ] ", "[/] ");
+        } else if (currentText.startsWith("[/] ")) {
+          newText = currentText.replace("[/] ", "[x] ");
+        } else if (currentText.startsWith("[x] ")) {
+          newText = currentText.replace("[x] ", "[-] ");
+        } else if (currentText.startsWith("[-] ")) {
+          newText = currentText.replace("[-] ", "[ ] ");
+        }
+
+        // Если текст изменился — запускаем мгновенное одиночное автосохранение блока в базу
+        if (currentText !== newText) {
+          block.content = newText;
+
+          const blockToSave = Object.assign({}, block);
+
+          // Асинхронно шифруем только этот измененный блок и пускаем в базу
+          encryptText(newText).then(encryptedContent => {
+            blockToSave.content = encryptedContent;
+            blockToSave.level = block.level !== undefined ? block.level : 0;
+            blockToSave.order = block.order;
+
+            const transaction = db.transaction(["blocks"], "readwrite");
+            transaction.objectStore("blocks").put(blockToSave);
+
+            // Начисто перерисовываем экран, чтобы мгновенно применились новые стили
+            transaction.oncomplete = function() {
+              loadBlocks();
+            };
+          });
+        }
+        return; // Мгновенный выход, чтобы не активировался режим редактирования строки!
+      }
+      // =============================================================================
 
       // А. Если кликнули строго по вики-ссылке [[Страница]] или хештегу #тег
       if (e.target.classList.contains("page-link")) {
