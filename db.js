@@ -2181,6 +2181,14 @@ window.addEventListener("DOMContentLoaded", function () {
     if (!calModal) return;
     calModal.style.display = "flex";
 
+    // ИСПРАВЛЕНИЕ: Автоматически закрываем левую панель на мобилках при вызове календаря
+    const mobileSidebar = document.querySelector(".sidebar");
+    const mobileOverlay = document.getElementById("sidebar-overlay");
+    if (mobileSidebar && mobileOverlay) {
+      mobileSidebar.classList.remove("mobile-open");
+      mobileOverlay.classList.remove("mobile-open");
+    }
+
     const activePagesList = [];
     const tx = db.transaction(["pages"], "readonly");
     const store = tx.objectStore("pages");
