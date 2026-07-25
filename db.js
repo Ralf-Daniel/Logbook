@@ -384,33 +384,41 @@ async function reorderAndSaveBlocks(blocksArray) {
   });
 }
 
-
-// Быстрая выгрузка блоков + ПОИСК УПОМИНАНИЙ И ТЕГОВ (Linked References)
-// СТАНЕТ:
+// БЫСТРАЯ ВЫГРУЗКА БЛОКОВ С АВТО-ОБНОВЛЕНИЕМ ДНЯ НЕДЕЛИ В ЗАГЛОВКЕ
 function loadBlocks() {
   const blockListElement = document.getElementById("blocks-list");
   if (!blockListElement) return;
   blockListElement.innerHTML = "";
 
   // === СИСТEМA ИСТOРИИ НАВИГАЦИИ ===
-  // Если мы перешли на страницу обычным кликом (не кнопками Назад/Вперед)
-  // СТАНЕТ:
   if (!isNavigatingViaButtons && currentPageUUID) {
-    // Берем самый первый ID из истории (это и есть страница, с которой мы только что ушли)
     const previousPageId = navigationHistoryBack.length > 0 ? navigationHistoryBack[0] : null;
-
     if (previousPageId !== currentPageUUID) {
       navigationHistoryBack.unshift(currentPageUUID);
       navigationHistoryForward = [];
     }
   }
-
   // ==================================
 
   const currentPageId = currentPageUUID;
 
+  // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Автоматически обновляем и форматируем заголовок страницы при любой загрузке!
+  if (currentPageId) {
+    const pageTx = db.transaction(["pages"], "readonly");
+    pageTx.objectStore("pages").get(currentPageId).onsuccess = async function(e) {
+      const pageData = e.target.result;
+      if (pageData) {
+        const clearTitle = await decryptText(pageData.title);
+        const isJournalType = pageData.type === "journal" || /^\d{4}-\d{2}-\d{2}$/.test(clearTitle.trim());
+
+        // Надеваем красивую обёртку дня недели, если это журнал
+        document.getElementById("page-title").innerText = isJournalType ? formatJournalTitle(clearTitle) : clearTitle;
+      }
+    };
+  }
+
   const rawBlocks = [];
-  const allDatabaseBlocks = []; // Сюда соберем вообще все блоки для поиска тегов
+  const allDatabaseBlocks = [];
 
   const transaction = db.transaction(["blocks"], "readonly");
   const store = transaction.objectStore("blocks");
@@ -419,28 +427,27 @@ function loadBlocks() {
     const cursor = event.target.result;
     if (cursor) {
       const block = cursor.value;
-      allDatabaseBlocks.push(block); // Сохраняем для анализа тегов
-      if (block.pageId === currentPageId) { rawBlocks.push(block); }
+      allDatabaseBlocks.push(block);
+      if (block.pageId === currentPageId) {
+        rawBlocks.push(block);
+      }
       cursor.continue();
     } else {
       // 1. Отрисовываем основные блоки текущей страницы
       processAndRenderBlocks(rawBlocks);
 
-      // 2. Запускаем поиск упоминаний этого тега/страницы по всей базе данных
+      // 2. Запускаем поиск упоминаний по всей базе данных
       renderLinkedReferences(allDatabaseBlocks);
 
-      // === НАШ ДОБАВЛЕННЫЙ БЛОК ДЛЯ СKPОЛЛA И ВСПЫШКИ ===
-      // Как только весь контент выведен в HTML, даем один кадр анимации
-      // на отрисовку и плавно подсвечиваем якорную строку!
+      // 3. Плавно подсвечиваем якорную строку, если был переход по ссылке
       requestAnimationFrame(function() {
         if (typeof window.highlightAnchorBlock === 'function') {
           window.highlightAnchorBlock();
         }
       });
-      // ==================================================
     }
   };
-}
+} // Функция loadBlocks окончательно закрывается здесь!
 
 // УМНАЯ И ИНФОРМАТИВНАЯ ОТРИСОВКА СВЯЗАННЫХ ТЕГОВ И УПОМИНАНИЙ (В СТИЛЕ LOGSEQ)
 async function renderLinkedReferences(allBlocks) {
