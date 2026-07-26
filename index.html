@@ -24,10 +24,21 @@
     </head>
     <body>
         <!-- Экран ввода мастер-пароля -->
+        <!--
         <div id="lock-screen" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: #fcfbfa; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px;">
             <h2 style="text-transform: uppercase; letter-spacing: 2px; font-size: 18px; color: #4a4a4a;">Logbook</h2>
             <input type="password" id="master-password-input" placeholder="Введите мастер-пароль..." style="padding: 12px; font-family: inherit; font-size: 16px; border: 2px solid #1a1a1a; width: 260px; text-align: center; outline: none; background-color: #f5f4f0;">
             <button id="btn-unlock" style="width: 260px; padding: 12px;">🔓 Разблокировать</button>
+        </div>
+        -->
+
+        <!-- СТРОГИЙ ЭКРАН ВХОДА В ОДНУ СТРОКУ (СОХРАНЕНЫ СИСТЕМНЫЕ ID) -->
+        <div id="lock-screen">
+          <div class="auth-compact-row">
+            <span class="auth-logo">LOGBOOK</span>
+            <input type="password" id="master-password-input" placeholder="password" autocomplete="current-password">
+            <button id="btn-unlock" title="Разблокировать">🔓</button>
+          </div>
         </div>
 
         <script>

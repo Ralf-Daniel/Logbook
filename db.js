@@ -281,12 +281,12 @@ function loadPagesList() {
 
     // 3. Отрисовка Обычных Заметок (ИСПРАВЛЕНО: добавили префикс 📝)
     notePages.forEach(p => {
-      listNotes.appendChild(createSidebarItem(p.id, "📝 " + p.title));
+      listNotes.appendChild(createSidebarItem(p.id, p.title));
     });
 
     // 4. Отрисовка Тегов (ИСПРАВЛЕНО: добавили иконку 🏷️ и привязали тип tag)
     sortedTags.forEach(tag => {
-      const itemLi = createSidebarItem(tag, "🏷️ " + tag);
+      const itemLi = createSidebarItem(tag, tag);
 
       // Переопределяем клик по тегу для вызова главного конвейера
       itemLi.onclick = function() {
