@@ -437,7 +437,7 @@ function loadBlocks() {
       processAndRenderBlocks(rawBlocks);
 
       // 2. Запускаем поиск упоминаний по всей базе данных
-      renderLinkedReferences(allDatabaseBlocks);
+      renderLinkedReferences(); // Просто вызываем без передачи allDatabaseBlocks
 
       // 3. Плавно подсвечиваем якорную строку, если был переход по ссылке
       requestAnimationFrame(function() {
@@ -449,110 +449,100 @@ function loadBlocks() {
   };
 } // Функция loadBlocks окончательно закрывается здесь!
 
-// СТРОГИЙ ВЫВОД СТРАНИЦ ДЛЯ ТЕГОВ (ПОЛНОЕ ОТКЛЮЧЕНИЕ ЛИШНИХ ОБРАТНЫХ ССЫЛОК)
-function renderLinkedReferences(allBlocks) {
+// БРОНЕБОЙНЫЙ АВТОНОМНЫЙ ВЫВОД СТРАНИЦ ДЛЯ ТЕГОВ (ЗАЩИТА ОТ АСИНХРОННЫХ НАЛОЖЕНИЙ)
+function renderLinkedReferences() { // УБРАЛИ параметр allBlocks, функция теперь полностью независима!
   const container = document.getElementById("linked-references-area");
   if (!container) return;
-  container.innerHTML = ""; // Очищаем контейнер
+  container.innerHTML = "";
 
-  // Защита: если страница не выбрана — уходим
   if (!currentPageUUID) {
     container.style.display = "none";
     return;
   }
 
-  // Считываем паспорт текущей страницы из базы
+  // 1. Считываем паспорт текущей страницы из базы
   const pageTx = db.transaction(["pages"], "readonly");
   pageTx.objectStore("pages").get(currentPageUUID).onsuccess = async function(e) {
     const currentPageData = e.target.result;
-    if (!currentPageData) {
+    if (!currentPageData || currentPageData.type !== "tag") {
       container.style.display = "none";
       return;
     }
 
-    // КРИТИЧЕСКОЕ ПРАВИЛО: Если это обычная заметка или журнал — обратные ссылки НЕ НУЖНЫ.
-    // Мгновенно скрываем контейнер и полностью выходим из функции!
-    if (currentPageData.type !== "tag") {
-      container.style.display = "none";
-      return;
-    }
-
-    // ЕСЛИ МЫ НА СТРАНИЦЕ ТЕГА: собираем только заголовки страниц, где он упомянут
     const currentPageTitle = await decryptText(currentPageData.title);
-    // ЕСЛИ МЫ НА СТРАНИЦЕ ТЕГА: собираем только заголовки страниц, где он упомянут
-    const cleanTagTitle = currentPageTitle.trim(); // Оставляем оригинальный регистр для регулярки
+    const cleanTagTitle = currentPageTitle.trim();
 
-    // Используем Set, чтобы автоматически отсечь любые дубликаты страниц
-    const uniqueParentPageIds = new Set();
+    // 2. АВТОНОМНЫЙ СБОР БЛОКОВ: открываем свою личную, изолированную транзакцию к базе
+    const blocksTx = db.transaction(["blocks"], "readonly");
+    const blocksStore = blocksTx.objectStore("blocks");
+    const localAllBlocks = [];
 
-    // Создаем сверхстрогое регулярное выражение: ищем #тег, игнорируя регистр букв (флаг 'i')
-    // и защищаясь от того, чтобы #спорт не перепутался со словом #спортивный (символ \b или граница слова)
-    // Используем безопасное экранирование спецсимволов на всякий случай
-    const safeTagEscaped = cleanTagTitle.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-    const tagRegex = new RegExp(`#${safeTagEscaped}(\\s|$|[.,!?;:])`, 'i');
-
-    for (let b of allBlocks) {
-      if (b.pageId === currentPageUUID) continue; // Пропускаем блоки самого тега
-      try {
-        const decryptedContent = await decryptText(b.content);
-        if (decryptedContent) {
-          // Проверяем наличие хэштега через регулярное выражение с защитой регистра
-          if (tagRegex.test(decryptedContent)) {
-            uniqueParentPageIds.add(b.pageId); // Сохраняем только ID страницы-родителя
-          }
-        }
-      } catch (err) {}
-    }
-
-
-    // Если ни одного упоминания тега в базе нет — скрываем блок и выходим
-    if (uniqueParentPageIds.size === 0) {
-      container.style.display = "none";
-      return;
-    }
-
-    // Показываем блок для вывода строгого списка
-    container.style.display = "block";
-
-    const ulList = document.createElement("ul");
-    ulList.className = "linked-refs-list";
-    ulList.style.cssText = "list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px;";
-
-    const pagesTx = db.transaction(["pages"], "readonly");
-    const pagesStore = pagesTx.objectStore("pages");
-
-    // Бежим по уникальным ID найденных страниц и выводим их строгими заголовками
-    for (let parentPageId of uniqueParentPageIds) {
-      const parentPage = await new Promise((resolve) => {
-        pagesStore.get(parentPageId).onsuccess = (ev) => resolve(ev.target.result);
-      });
-
-      if (parentPage) {
-        const parentTitle = await decryptText(parentPage.title);
-
-        const li = document.createElement("li");
-        // Красивая, лаконичная светлая плашка-ссылка без лишнего мусора внутри
-        li.style.cssText = "padding: 10px 16px; background-color: #f7f6f0; border-radius: 6px; border: 1px solid #e3e2dc; cursor: pointer; font-family: 'Comfortaa', sans-serif; font-weight: 700; font-size: 14px; color: #2b6cb0; transition: all 0.15s ease;";
-
-        // Если страница является журналом — красиво пишем день недели, иначе — чистый заголовок заметки
-        li.innerText = parentPage.type === "journal" ? formatJournalTitle(parentTitle) : parentTitle;
-
-        // Эффект наведения мышки для интерактивности
-        li.onmouseenter = () => { li.style.borderColor = "#1a1a1a"; li.style.backgroundColor = "#f0eee6"; };
-        li.onmouseleave = () => { li.style.borderColor = "#e3e2dc"; li.style.backgroundColor = "#f7f6f0"; };
-
-        // КЛИК ПО СТРОКЕ: Бесшовный переход на выбранную заметку
-        li.onclick = function() {
-          checkAndCreatePage(parentTitle, parentPage.type);
-        };
-
-        ulList.appendChild(li);
+    blocksStore.openCursor().onsuccess = function(event) {
+      const cursor = event.target.result;
+      if (cursor) {
+        localAllBlocks.push(cursor.value);
+        cursor.continue();
+      } else {
+        // Курсор собрал ВСЕ блоки. Запускаем дешифратор и строгий поиск
+        processAndRenderTagReferences(localAllBlocks, cleanTagTitle, container);
       }
-    }
-
-    container.appendChild(ulList);
+    };
   };
 }
+
+// Вспомогательная асинхронная функция дешифрования и рендеринга списка
+async function processAndRenderTagReferences(blocksArray, tagTitle, container) {
+  const uniqueParentPageIds = new Set();
+  const safeTagEscaped = tagTitle.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+  const tagRegex = new RegExp(`#${safeTagEscaped}(\\s|$|[.,!?;:])`, 'i');
+
+  for (let b of blocksArray) {
+    if (b.pageId === currentPageUUID) continue;
+    try {
+      const decryptedContent = await decryptText(b.content);
+      if (decryptedContent && tagRegex.test(decryptedContent)) {
+        uniqueParentPageIds.add(b.pageId);
+      }
+    } catch (err) {}
+  }
+
+  if (uniqueParentPageIds.size === 0) {
+    container.style.display = "none";
+    return;
+  }
+
+  container.style.display = "block";
+  const ulList = document.createElement("ul");
+  ulList.style.cssText = "list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px;";
+
+  const pagesTx = db.transaction(["pages"], "readonly");
+  const pagesStore = pagesTx.objectStore("pages");
+
+  for (let parentPageId of uniqueParentPageIds) {
+    const parentPage = await new Promise((resolve) => {
+      pagesStore.get(parentPageId).onsuccess = (ev) => resolve(ev.target.result);
+    });
+
+    if (parentPage) {
+      const parentTitle = await decryptText(parentPage.title);
+      const li = document.createElement("li");
+      li.style.cssText = "padding: 10px 16px; background-color: #f7f6f0; border-radius: 6px; border: 1px solid #e3e2dc; cursor: pointer; font-family: 'Comfortaa', sans-serif; font-weight: 700; font-size: 14px; color: #2b6cb0; transition: all 0.15s ease;";
+
+      li.innerText = parentPage.type === "journal" ? formatJournalTitle(parentTitle) : parentTitle;
+
+      li.onmouseenter = () => { li.style.borderColor = "#1a1a1a"; li.style.backgroundColor = "#f0eee6"; };
+      li.onmouseleave = () => { li.style.borderColor = "#e3e2dc"; li.style.backgroundColor = "#f7f6f0"; };
+
+      li.onclick = function() {
+        checkAndCreatePage(parentTitle, parentPage.type);
+      };
+
+      ulList.appendChild(li);
+    }
+  }
+  container.appendChild(ulList);
+}
+
 
 // Асинхронный рендеринг блоков в памяти
 async function processAndRenderBlocks(pageBlocks) {
