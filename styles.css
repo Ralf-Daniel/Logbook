@@ -175,26 +175,6 @@ body, .sidebar, #page-title, #blocks-list li span {
     margin-left: -300px;
 }
 
-/* === ОСНОВНОЙ КОНТЕНТ === */
-/*.main-content {
-    flex-grow: 1;
-    padding: 30px 24px 45vh 24px !important;
-    overflow-y: auto;
-    height: 100%;
-    box-sizing: border-box;
-    background-color: #fcfbfa;
-    scroll-behavior: smooth;
-}*/
-
-/*.header-area {
-    display: flex;
-    align-items: center;
-    gap: 20px;
-    margin-bottom: 30px;
-    border-bottom: 1px solid #e3e2dc;
-    padding-bottom: 15px;
-}*/
-
 /* ЖЕЛЕЗОБЕТОННАЯ ФИКСАЦИЯ ШАПКИ НАВЕРХУ (ОБНОВЛЕННАЯ СУПЕР-КОМПАКТНАЯ) */
 .header-area {
     position: sticky !important;
@@ -704,7 +684,8 @@ button:hover {
     flex-grow: 1;
     padding: 0 24px 45vh 24px !important;
     overflow-y: auto;
-    height: 100%;
+    position: relative;
+    height: 100vh; /* было 100% */
     box-sizing: border-box;
     background-color: #fcfbfa;
     scroll-behavior: smooth;
