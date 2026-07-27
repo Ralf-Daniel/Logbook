@@ -285,10 +285,27 @@ function loadPagesList() {
     });
 
     // 4. Отрисовка Тегов (ИСПРАВЛЕНО: УБРАН ДВОЙНОЙ КЛИК)
-    sortedTags.forEach(tag => {
+    /* sortedTags.forEach(tag => {
       // Передаем tag и в качестве ID, и в качестве текста — без лишних надстроек .onclick!
       listTags.appendChild(createSidebarItem(tag, tag));
+    }); */
+
+    // ====================================================
+    // 4. Отрисовка Тегов (ИСПРАВЛЕНО НА СВЕРХНАДЕЖНЫЙ ВАРИАНТ)
+    sortedTags.forEach(tag => {
+      // Создаем строку через базовую функцию
+      const itemLi = createSidebarItem(tag, tag);
+
+      // Переопределяем клик: открываем тег по его честному текстовому имени через главный конвейер
+      itemLi.onclick = function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        checkAndCreatePage(tag, "tag");
+      };
+
+      listTags.appendChild(itemLi);
     });
+    // ====================================================
 
     if (sortedTags.length === 0) {
       listTags.innerHTML = "<li style='font-style:italic; color:#acaba4; pointer-events:none; font-size:12px;'>Нет тегов 🏷️</li>";
@@ -443,8 +460,8 @@ function loadBlocks() {
   };
 } // Функция loadBlocks окончательно закрывается здесь!
 
-// БРОНЕБОЙНЫЙ АВТОНОМНЫЙ ВЫВОД СТРАНИЦ ДЛЯ ТЕГОВ (ЗАЩИТА ОТ АСИНХРОННЫХ НАЛОЖЕНИЙ)
-function renderLinkedReferences() { // УБРАЛИ параметр allBlocks, функция теперь полностью независима!
+// БРОНЕБОЙНЫЙ МИНИМАЛИСТИЧНЫЙ ПОИСК СТРАНИЦ ДЛЯ ТЕГОВ
+function renderLinkedReferences() {
   const container = document.getElementById("linked-references-area");
   if (!container) return;
   container.innerHTML = "";
@@ -454,35 +471,94 @@ function renderLinkedReferences() { // УБРАЛИ параметр allBlocks, 
     return;
   }
 
-  // 1. Считываем паспорт текущей страницы из базы
-  const pageTx = db.transaction(["pages"], "readonly");
-  pageTx.objectStore("pages").get(currentPageUUID).onsuccess = async function(e) {
-    const currentPageData = e.target.result;
-    if (!currentPageData || currentPageData.type !== "tag") {
-      container.style.display = "none";
-      return;
-    }
+  // Читаем чистый текст заголовка прямо с экрана (например, "спорт" или "идеи")
+  const rawTitle = document.getElementById("page-title").innerText.trim();
 
-    const currentPageTitle = await decryptText(currentPageData.title);
-    const cleanTagTitle = currentPageTitle.trim();
+  // Отрезаем день недели, если он там есть (на случай журналов, хотя мы ищем теги)
+  const cleanTitle = rawTitle.replace(/^[a-zA-Z]{3}\.\s*/, "").trim();
 
-    // 2. АВТОНОМНЫЙ СБОР БЛОКОВ: открываем свою личную, изолированную транзакцию к базе
-    const blocksTx = db.transaction(["blocks"], "readonly");
-    const blocksStore = blocksTx.objectStore("blocks");
-    const localAllBlocks = [];
+  // КРИТИЧЕСКАЯ ПРОВЕРКА: Если в заголовке написана дата (ГГГГ-ММ-ДД), значит это журнал,
+  // а на журналах и обычных заметках нам список упоминаний НЕ НУЖЕН!
+  if (/^\d{4}-\d{2}-\d{2}$/.test(cleanTitle)) {
+    container.style.display = "none";
+    return;
+  }
 
-    blocksStore.openCursor().onsuccess = function(event) {
-      const cursor = event.target.result;
-      if (cursor) {
-        localAllBlocks.push(cursor.value);
-        cursor.continue();
-      } else {
-        // Курсор собрал ВСЕ блоки. Запускаем дешифратор и строгий поиск
-        processAndRenderTagReferences(localAllBlocks, cleanTagTitle, container);
+  // Если мы попали сюда — значит, мы на 100% находимся на странице ТЕГА!
+  // Быстро открываем транзакцию и собираем абсолютно все блоки базы данных для анализа
+  const tx = db.transaction(["blocks"], "readonly");
+  const store = tx.objectStore("blocks");
+  const allBlocks = [];
+
+  store.openCursor().onsuccess = function(event) {
+    const cursor = event.target.result;
+    if (cursor) {
+      allBlocks.push(cursor.value);
+      cursor.continue();
+    } else {
+      // Все блоки собраны, запускаем прямолинейный поиск по тексту тега
+      const uniqueParentPageIds = new Set();
+      const cleanSearchTag = `#${cleanTitle.toLowerCase()}`;
+
+      for (let b of allBlocks) {
+        if (b.pageId === currentPageUUID) continue;
+        try {
+          const decryptedContent = decryptTextSync(b.content); // или обычный зашифрованный контент
+          // Для надежности используем асинхронный дешифратор через промис
+          decryptText(b.content).then(decryptedContent => {
+            if (decryptedContent) {
+              const lowerBlockText = decryptedContent.toLowerCase();
+              if (lowerBlockText.includes(cleanSearchTag)) {
+                uniqueParentPageIds.add(b.pageId);
+                // Как только нашли совпадение, обновляем экран
+                renderTagPagesList(uniqueParentPageIds, container);
+              }
+            }
+          });
+        } catch (err) {}
       }
-    };
+    }
   };
 }
+
+// Вспомогательная функция вывода списка на экран
+async function renderTagPagesList(pageIdsSet, container) {
+  if (pageIdsSet.size === 0) return;
+
+  container.innerHTML = "";
+  container.style.display = "block";
+
+  const ulList = document.createElement("ul");
+  ulList.style.cssText = "list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px;";
+
+  const pagesTx = db.transaction(["pages"], "readonly");
+  const pagesStore = pagesTx.objectStore("pages");
+
+  for (let parentPageId of pageIdsSet) {
+    const parentPage = await new Promise((resolve) => {
+      pagesStore.get(parentPageId).onsuccess = (ev) => resolve(ev.target.result);
+    });
+
+    if (parentPage) {
+      const parentTitle = await decryptText(parentPage.title);
+      const li = document.createElement("li");
+      li.style.cssText = "padding: 10px 16px; background-color: #f7f6f0; border-radius: 6px; border: 1px solid #e3e2dc; cursor: pointer; font-family: 'Comfortaa', sans-serif; font-weight: 700; font-size: 14px; color: #2b6cb0; transition: all 0.15s ease;";
+
+      li.innerText = parentPage.type === "journal" ? formatJournalTitle(parentTitle) : parentTitle;
+
+      li.onmouseenter = () => { li.style.borderColor = "#1a1a1a"; li.style.backgroundColor = "#f0eee6"; };
+      li.onmouseleave = () => { li.style.borderColor = "#e3e2dc"; li.style.backgroundColor = "#f7f6f0"; };
+
+      li.onclick = function() {
+        checkAndCreatePage(parentTitle, parentPage.type);
+      };
+
+      ulList.appendChild(li);
+    }
+  }
+  container.appendChild(ulList);
+}
+
 
 // КРИСТАЛЬНО ЧИСТЫЙ И ПРОСТОЙ РЕНДЕР СТРАНИЦ ДЛЯ ТЕГОВ (БЕЗ РЕГУЛЯРОК)
 async function processAndRenderTagReferences(blocksArray, tagTitle, container) {
