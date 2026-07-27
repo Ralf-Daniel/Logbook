@@ -449,86 +449,97 @@ function loadBlocks() {
   };
 } // Функция loadBlocks окончательно закрывается здесь!
 
-// УМНАЯ И ИНФОРМАТИВНАЯ ОТРИСОВКА СВЯЗАННЫХ ТЕГОВ И УПОМИНАНИЙ (В СТИЛЕ LOGSEQ)
-async function renderLinkedReferences(allBlocks) {
-  const refArea = document.getElementById("linked-references-area");
-  const refList = document.getElementById("linked-references-list");
-  const currentTitle = document.getElementById("page-title").innerText.trim().toLowerCase();
+// КРИСТАЛЬНО ЧИСТЫЙ ВЫВОД СВЯЗАННЫХ СТРОК (БЕЗ ВИЗУАЛЬНОГО ШУМА)
+function renderLinkedReferences(allBlocks) {
+  const container = document.getElementById("linked-references-area");
+  if (!container) return;
+  container.innerHTML = ""; // Полностью очищаем блок внизу экрана
 
-  if (!refArea || !refList || currentTitle === "") return;
-  refList.innerHTML = "";
-  let matchesCount = 0;
+  // Если мы находимся на пустой или неопределенной странице — сразу выходим
+  if (!currentPageUUID) return;
 
-  // 1. Сначала выкачиваем все страницы в память, чтобы мгновенно находить их названия по ID
-  const allPages = [];
+  // 1. Ищем честное текстовое имя текущей страницы
   const pageTx = db.transaction(["pages"], "readonly");
-  pageTx.objectStore("pages").openCursor().onsuccess = function(e) {
-    const cursor = e.target.result;
-    if (cursor) { allPages.push(cursor.value); cursor.continue(); }
-  };
+  pageTx.objectStore("pages").get(currentPageUUID).onsuccess = async function(e) {
+    const currentPageData = e.target.result;
+    if (!currentPageData) return;
 
-  // Ждем закрытия транзакции страниц перед началом анализа блоков
-  await new Promise(resolve => pageTx.oncomplete = resolve);
+    const currentPageTitle = await decryptText(currentPageData.title);
+    const cleanCurrentTitle = currentPageTitle.trim().toLowerCase();
 
-  // 2. Бежим по всем блокам базы данных
-  for (let block of allBlocks) {
-    if (block.pageId === currentPageUUID) continue; // Пропускаем блоки этой же страницы
+    // 2. Сканируем ВСЕ блоки базы данных в поиске упоминаний нашей страницы или тега #тег
+    const matchingBlocks = [];
+    for (let b of allBlocks) {
+      if (b.pageId === currentPageUUID) continue; // Пропускаем блоки этой же самой страницы
+      try {
+        const decryptedContent = await decryptText(b.content);
+        if (decryptedContent) {
+          const lowerContent = decryptedContent.toLowerCase();
+          // Проверяем прямое упоминание [[Имя]] или хэштег #Имя
+          const hasWikiRef = lowerContent.includes(`[[${cleanCurrentTitle}]]`);
+          const hasTagRef = lowerContent.includes(`#${cleanCurrentTitle}`);
 
-    const decryptedContent = await decryptText(block.content);
-    if (!decryptedContent || decryptedContent.trim() === "") continue;
+          if (hasWikiRef || hasTagRef) {
+            matchingBlocks.push({ block: b, content: decryptedContent });
+          }
+        }
+      } catch (err) {}
+    }
 
-    const lowerContent = decryptedContent.toLowerCase();
+    // Если совпадений нет — блок внизу экрана остается абсолютно невидимым и чистым
+    if (matchingBlocks.length === 0) {
+      container.style.display = "none";
+      return;
+    }
 
-    // Ищем упоминание тега или вики-ссылки на текущую страницу
-    const hasTag = lowerContent.includes("#" + currentTitle);
-    //const hasWiki = lowerContent.includes("[[" + currentTitle + "]]") || lowerContent.includes("[[" + currentTitle + "|");
+    container.style.display = "block";
 
-    if (hasTag) {
-      matchesCount++;
+    // ИСПРАВЛЕНИЕ: Мы ПОЛНОСТЬЮ УДАЛИЛИ надпись "Упоминание на других страницах" для чистоты экрана!
+    const ulList = document.createElement("ul");
+    ulList.className = "linked-refs-list";
+    ulList.style.cssText = "list-style: none; padding: 0; margin: 0;";
 
-      // Находим саму страницу в памяти, чтобы узнать её человеческое заголовок
-      const targetPageObj = allPages.find(p => p.id === block.pageId);
-      const pageTitleText = targetPageObj ? await decryptText(targetPageObj.title) : "Неизвестная заметка";
+    // Группируем найденные блоки по страницам, на которых они лежат
+    const pagesTx = db.transaction(["pages"], "readonly");
+    const pagesStore = pagesTx.objectStore("pages");
 
-      // Создаем красивый контейнер для упоминания
-      const containerLi = document.createElement("li");
-      containerLi.style.cssText = "margin-bottom: 16px; padding: 12px; background-color: #f5f4f0; border: 1px solid #e3e2dc; border-radius: 6px; font-size: 14px; box-shadow: inset 0 1px 2px rgba(0,0,0,0.02);";
-
-      // А. Создаем КЛИКАБЕЛЬНЫЙ ЗАГОЛОВОК страницы, на которой найден тег
-      const headerDiv = document.createElement("div");
-      headerDiv.style.cssText = "font-weight: 700; color: #2b6cb0; margin-bottom: 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; cursor: pointer; display: inline-block;";
-      headerDiv.innerText = "📄 " + pageTitleText;
-
-      // Клик по заголовку плашки переносит внутрь этой заметки
-      headerDiv.addEventListener("click", function(e) {
-        e.stopPropagation();
-
-        // ВМЕСТО СТАРОГО РУЧНОГО ПЕРЕКЛЮЧЕНИЯ ЗАПУСКАЕМ НАШУ УМНУЮ НАВИГАЦИЮ!
-        focusedBlockId = block.id; // Запоминаем фокус на строку
-        checkAndCreatePage(pageTitleText, "page"); // Открываем страницу по-взрослому
+    for (let item of matchingBlocks) {
+      const parentPage = await new Promise((resolve) => {
+        pagesStore.get(item.block.pageId).onsuccess = (ev) => resolve(ev.target.result);
       });
 
+      if (parentPage) {
+        const parentTitle = await decryptText(parentPage.title);
 
-      // Б. Создаем блок с ТЕКСТОМ ЗАМЕТКИ (контекстом)
-      const contentDiv = document.createElement("div");
-      contentDiv.style.cssText = "color: #2c2c2c; padding-left: 10px; border-left: 2px solid #7c7c77; margin-top: 4px; line-height: 1.4;";
+        const li = document.createElement("li");
+        li.style.cssText = "margin-bottom: 14px; padding: 8px 12px; background-color: #f7f6f0; border-radius: 6px; border: 1px solid #e3e2dc; cursor: pointer;";
 
-      // Очищаем текст от внутренних ломающих вики-ссылок на саму себя, но рендерим остальной Markdown
-      contentDiv.innerHTML = parseMarkdown(decryptedContent);
+        // ИСПРАВЛЕНИЕ: Выводим ТОЛЬКО чистый заголовок родительской заметки (БЕЗ ИКОНОК И СМАЙЛИКОВ)
+        const headerDiv = document.createElement("div");
+        headerDiv.className = "ref-page-header";
+        headerDiv.innerText = parentPage.type === "journal" ? formatJournalTitle(parentTitle) : parentTitle;
+        headerDiv.style.cssText = "font-family: 'Comfortaa', sans-serif; font-weight: 700; font-size: 14px; color: #2b6cb0; margin-bottom: 4px;";
 
-      // Собираем плашку воедино
-      containerLi.appendChild(headerDiv);
-      containerLi.appendChild(contentDiv);
-      refList.appendChild(containerLi);
+        // Выводим сам текст найденной строки (обработанный через наш парсер markdown-it)
+        const contentDiv = document.createElement("div");
+        contentDiv.className = "ref-block-content";
+        contentDiv.innerHTML = parseMarkdown(item.content);
+        contentDiv.style.cssText = "font-size: 14px; color: #1a1a1a;";
+
+        li.appendChild(headerDiv);
+        li.appendChild(contentDiv);
+
+        // КЛИК ПО КАРТОЧКЕ: Быстрый бесшовный переход на эту страницу
+        li.onclick = function() {
+          checkAndCreatePage(parentTitle, parentPage.type);
+        };
+
+        ulList.appendChild(li);
+      }
     }
-  }
 
-  // Показываем или скрываем область упоминаний
-  if (matchesCount > 0) {
-    refArea.style.display = "block";
-  } else {
-    refArea.style.display = "none";
-  }
+    container.appendChild(ulList);
+  };
 }
 
 // Асинхронный рендеринг блоков в памяти
