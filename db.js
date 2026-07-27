@@ -449,87 +449,92 @@ function loadBlocks() {
   };
 } // Функция loadBlocks окончательно закрывается здесь!
 
-// КРИСТАЛЬНО ЧИСТЫЙ ВЫВОД СВЯЗАННЫХ СТРОК (БЕЗ ВИЗУАЛЬНОГО ШУМА)
+// СТРОГИЙ ВЫВОД СТРАНИЦ ДЛЯ ТЕГОВ (ПОЛНОЕ ОТКЛЮЧЕНИЕ ЛИШНИХ ОБРАТНЫХ ССЫЛОК)
 function renderLinkedReferences(allBlocks) {
   const container = document.getElementById("linked-references-area");
   if (!container) return;
-  container.innerHTML = ""; // Полностью очищаем блок внизу экрана
+  container.innerHTML = ""; // Очищаем контейнер
 
-  // Если мы находимся на пустой или неопределенной странице — сразу выходим
-  if (!currentPageUUID) return;
+  // Защита: если страница не выбрана — уходим
+  if (!currentPageUUID) {
+    container.style.display = "none";
+    return;
+  }
 
-  // 1. Ищем честное текстовое имя текущей страницы
+  // Считываем паспорт текущей страницы из базы
   const pageTx = db.transaction(["pages"], "readonly");
   pageTx.objectStore("pages").get(currentPageUUID).onsuccess = async function(e) {
     const currentPageData = e.target.result;
-    if (!currentPageData) return;
+    if (!currentPageData) {
+      container.style.display = "none";
+      return;
+    }
 
+    // КРИТИЧЕСКОЕ ПРАВИЛО: Если это обычная заметка или журнал — обратные ссылки НЕ НУЖНЫ.
+    // Мгновенно скрываем контейнер и полностью выходим из функции!
+    if (currentPageData.type !== "tag") {
+      container.style.display = "none";
+      return;
+    }
+
+    // ЕСЛИ МЫ НА СТРАНИЦЕ ТЕГА: собираем только заголовки страниц, где он упомянут
     const currentPageTitle = await decryptText(currentPageData.title);
-    const cleanCurrentTitle = currentPageTitle.trim().toLowerCase();
+    const cleanTagTitle = currentPageTitle.trim().toLowerCase();
 
-    // 2. Сканируем ВСЕ блоки базы данных в поиске упоминаний нашей страницы или тега #тег
-    const matchingBlocks = [];
+    // Используем Set, чтобы автоматически отсечь любые дубликаты страниц
+    const uniqueParentPageIds = new Set();
+
     for (let b of allBlocks) {
-      if (b.pageId === currentPageUUID) continue; // Пропускаем блоки этой же самой страницы
+      if (b.pageId === currentPageUUID) continue; // Пропускаем блоки самого тега
       try {
         const decryptedContent = await decryptText(b.content);
         if (decryptedContent) {
           const lowerContent = decryptedContent.toLowerCase();
-          // Проверяем прямое упоминание [[Имя]] или хэштег #Имя
-          const hasWikiRef = lowerContent.includes(`[[${cleanCurrentTitle}]]`);
-          const hasTagRef = lowerContent.includes(`#${cleanCurrentTitle}`);
-
-          if (hasWikiRef || hasTagRef) {
-            matchingBlocks.push({ block: b, content: decryptedContent });
+          // Проверяем, содержит ли блок наш хэштег #тег
+          if (lowerContent.includes(`#${cleanTagTitle}`)) {
+            uniqueParentPageIds.add(b.pageId); // Сохраняем только ID страницы-родителя
           }
         }
       } catch (err) {}
     }
 
-    // Если совпадений нет — блок внизу экрана остается абсолютно невидимым и чистым
-    if (matchingBlocks.length === 0) {
+    // Если ни одного упоминания тега в базе нет — скрываем блок и выходим
+    if (uniqueParentPageIds.size === 0) {
       container.style.display = "none";
       return;
     }
 
+    // Показываем блок для вывода строгого списка
     container.style.display = "block";
 
-    // ИСПРАВЛЕНИЕ: Мы ПОЛНОСТЬЮ УДАЛИЛИ надпись "Упоминание на других страницах" для чистоты экрана!
     const ulList = document.createElement("ul");
     ulList.className = "linked-refs-list";
-    ulList.style.cssText = "list-style: none; padding: 0; margin: 0;";
+    ulList.style.cssText = "list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px;";
 
-    // Группируем найденные блоки по страницам, на которых они лежат
     const pagesTx = db.transaction(["pages"], "readonly");
     const pagesStore = pagesTx.objectStore("pages");
 
-    for (let item of matchingBlocks) {
+    // Бежим по уникальным ID найденных страниц и выводим их строгими заголовками
+    for (let parentPageId of uniqueParentPageIds) {
       const parentPage = await new Promise((resolve) => {
-        pagesStore.get(item.block.pageId).onsuccess = (ev) => resolve(ev.target.result);
+        pagesStore.get(parentPageId).onsuccess = (ev) => resolve(ev.target.result);
       });
 
       if (parentPage) {
         const parentTitle = await decryptText(parentPage.title);
 
         const li = document.createElement("li");
-        li.style.cssText = "margin-bottom: 14px; padding: 8px 12px; background-color: #f7f6f0; border-radius: 6px; border: 1px solid #e3e2dc; cursor: pointer;";
+        // Красивая, лаконичная светлая плашка-ссылка без лишнего мусора внутри
+        li.style.cssText = "padding: 10px 16px; background-color: #f7f6f0; border-radius: 6px; border: 1px solid #e3e2dc; cursor: pointer; font-family: 'Comfortaa', sans-serif; font-weight: 700; font-size: 14px; color: #2b6cb0; transition: all 0.15s ease;";
 
-        // ИСПРАВЛЕНИЕ: Выводим ТОЛЬКО чистый заголовок родительской заметки (БЕЗ ИКОНОК И СМАЙЛИКОВ)
-        const headerDiv = document.createElement("div");
-        headerDiv.className = "ref-page-header";
-        headerDiv.innerText = parentPage.type === "journal" ? formatJournalTitle(parentTitle) : parentTitle;
-        headerDiv.style.cssText = "font-family: 'Comfortaa', sans-serif; font-weight: 700; font-size: 14px; color: #2b6cb0; margin-bottom: 4px;";
+        // Если страница является журналом — красиво пишем день недели, иначе — чистый заголовок заметки
+        li.innerText = parentPage.type === "journal" ? formatJournalTitle(parentTitle) : parentTitle;
 
-        // Выводим сам текст найденной строки (обработанный через наш парсер markdown-it)
-        const contentDiv = document.createElement("div");
-        contentDiv.className = "ref-block-content";
-        contentDiv.innerHTML = parseMarkdown(item.content);
-        contentDiv.style.cssText = "font-size: 14px; color: #1a1a1a;";
+        // Эффект наведения мышки для интерактивности
+        li.onmouseenter = () => { li.style.borderColor = "#1a1a1a"; li.style.backgroundColor = "#f0eee6"; };
+        li.onmouseleave = () => { li.style.borderColor = "#e3e2dc"; li.style.backgroundColor = "#f7f6f0"; };
 
-        li.appendChild(headerDiv);
-        li.appendChild(contentDiv);
-
-        // КЛИК ПО КАРТОЧКЕ: Быстрый бесшовный переход на эту страницу
+        // КЛИК ПО СТРОКЕ: Бесшовный переход на выбранную заметку
         li.onclick = function() {
           checkAndCreatePage(parentTitle, parentPage.type);
         };
