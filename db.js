@@ -479,24 +479,31 @@ function renderLinkedReferences(allBlocks) {
 
     // ЕСЛИ МЫ НА СТРАНИЦЕ ТЕГА: собираем только заголовки страниц, где он упомянут
     const currentPageTitle = await decryptText(currentPageData.title);
-    const cleanTagTitle = currentPageTitle.trim().toLowerCase();
+    // ЕСЛИ МЫ НА СТРАНИЦЕ ТЕГА: собираем только заголовки страниц, где он упомянут
+    const cleanTagTitle = currentPageTitle.trim(); // Оставляем оригинальный регистр для регулярки
 
     // Используем Set, чтобы автоматически отсечь любые дубликаты страниц
     const uniqueParentPageIds = new Set();
+
+    // Создаем сверхстрогое регулярное выражение: ищем #тег, игнорируя регистр букв (флаг 'i')
+    // и защищаясь от того, чтобы #спорт не перепутался со словом #спортивный (символ \b или граница слова)
+    // Используем безопасное экранирование спецсимволов на всякий случай
+    const safeTagEscaped = cleanTagTitle.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    const tagRegex = new RegExp(`#${safeTagEscaped}(\\s|$|[.,!?;:])`, 'i');
 
     for (let b of allBlocks) {
       if (b.pageId === currentPageUUID) continue; // Пропускаем блоки самого тега
       try {
         const decryptedContent = await decryptText(b.content);
         if (decryptedContent) {
-          const lowerContent = decryptedContent.toLowerCase();
-          // Проверяем, содержит ли блок наш хэштег #тег
-          if (lowerContent.includes(`#${cleanTagTitle}`)) {
+          // Проверяем наличие хэштега через регулярное выражение с защитой регистра
+          if (tagRegex.test(decryptedContent)) {
             uniqueParentPageIds.add(b.pageId); // Сохраняем только ID страницы-родителя
           }
         }
       } catch (err) {}
     }
+
 
     // Если ни одного упоминания тега в базе нет — скрываем блок и выходим
     if (uniqueParentPageIds.size === 0) {
