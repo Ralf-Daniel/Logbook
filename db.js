@@ -484,28 +484,36 @@ function renderLinkedReferences() { // УБРАЛИ параметр allBlocks, 
   };
 }
 
-// БРОНЕБОЙНЫЙ ВСЕЯДНЫЙ РЕНДЕР ТЕГОВ (ЗАЩИТА ОТ ГИБРИДНЫХ СВЯЗЕЙ В БАЗЕ)
+// КРИСТАЛЬНО ЧИСТЫЙ И ПРОСТОЙ РЕНДЕР СТРАНИЦ ДЛЯ ТЕГОВ (БЕЗ РЕГУЛЯРОК)
 async function processAndRenderTagReferences(blocksArray, tagTitle, container) {
   const uniqueParentPageIds = new Set();
-  const safeTagEscaped = tagTitle.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-  const tagRegex = new RegExp(`#${safeTagEscaped}(\\s|$|[.,!?;:])`, 'i');
 
-  // Собираем все уникальные маркеры страниц, где есть наш тег
+  // Переводим искомый тег в нижний регистр и убираем пробелы
+  const cleanSearchTag = `#${tagTitle.trim().toLowerCase()}`;
+
+  // 1. Ищем прямое совпадение тега в нижнем регистре по всем блокам
   for (let b of blocksArray) {
-    if (b.pageId === currentPageUUID) continue;
+    if (b.pageId === currentPageUUID) continue; // Пропускаем блоки самого тега
     try {
       const decryptedContent = await decryptText(b.content);
-      if (decryptedContent && tagRegex.test(decryptedContent)) {
-        uniqueParentPageIds.add(b.pageId); // Тут может лежать как UUID, так и текст даты!
+      if (decryptedContent) {
+        // Переводим текст блока в нижний регистр для стопроцентной всеядности к заглавным буквам
+        const lowerBlockText = decryptedContent.toLowerCase();
+
+        if (lowerBlockText.includes(cleanSearchTag)) {
+          uniqueParentPageIds.add(b.pageId); // Сохраняем ID страницы-родителя
+        }
       }
     } catch (err) {}
   }
 
+  // Если упоминаний нет — скрываем блок внизу экрана
   if (uniqueParentPageIds.size === 0) {
     container.style.display = "none";
     return;
   }
 
+  // Выводим строгий список страниц
   container.style.display = "block";
   const ulList = document.createElement("ul");
   ulList.style.cssText = "list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px;";
@@ -513,45 +521,26 @@ async function processAndRenderTagReferences(blocksArray, tagTitle, container) {
   const pagesTx = db.transaction(["pages"], "readonly");
   const pagesStore = pagesTx.objectStore("pages");
 
-  // Запускаем всеядный перебор найденных страниц
   for (let parentPageId of uniqueParentPageIds) {
-    let parentTitle = "";
-    let parentType = "page";
+    const parentPage = await new Promise((resolve) => {
+      pagesStore.get(parentPageId).onsuccess = (ev) => resolve(ev.target.result);
+    });
 
-    // ПРОВЕРКА 1: Проверяем, вдруг parentPageId — это уже готовый текст даты (ГГГГ-ММ-ДД)
-    if (/^\d{4}-\d{2}-\d{2}$/.test(String(parentPageId).trim())) {
-      parentTitle = String(parentPageId).trim();
-      parentType = "journal";
-    } else {
-      // ПРОВЕРКА 2: Если это UUID, ищем честный паспорт страницы в таблице pages
-      const parentPage = await new Promise((resolve) => {
-        pagesStore.get(parentPageId).onsuccess = (ev) => resolve(ev.target.result);
-      });
-
-      if (parentPage) {
-        parentTitle = await decryptText(parentPage.title);
-        parentType = parentPage.type;
-      }
-    }
-
-    // Если заголовок успешно определен (по любой из двух схем) — выводим строгую плашку!
-    if (parentTitle && parentTitle.trim() !== "") {
+    if (parentPage) {
+      const parentTitle = await decryptText(parentPage.title);
       const li = document.createElement("li");
       li.style.cssText = "padding: 10px 16px; background-color: #f7f6f0; border-radius: 6px; border: 1px solid #e3e2dc; cursor: pointer; font-family: 'Comfortaa', sans-serif; font-weight: 700; font-size: 14px; color: #2b6cb0; transition: all 0.15s ease;";
 
-      // Фирменный красивый день недели для журналов
-      li.innerText = parentType === "journal" ? formatJournalTitle(parentTitle) : parentTitle;
+      // Если это ежедневный журнал — выводим красивый заголовок с днем недели
+      li.innerText = parentPage.type === "journal" ? formatJournalTitle(parentTitle) : parentTitle;
 
+      // Элегантный Soft UI отклик при наведении мышки
       li.onmouseenter = () => { li.style.borderColor = "#1a1a1a"; li.style.backgroundColor = "#f0eee6"; };
       li.onmouseleave = () => { li.style.borderColor = "#e3e2dc"; li.style.backgroundColor = "#f7f6f0"; };
 
-      // Бесшовный переход на страницу по нашему отлаженному конвейеру
+      // Бесшовный переход на страницу по нашему главному конвейеру
       li.onclick = function() {
-        if (parentType === "journal") {
-          checkAndCreateJournalPage(parentTitle);
-        } else {
-          checkAndCreatePage(parentTitle, parentType);
-        }
+        checkAndCreatePage(parentTitle, parentPage.type);
       };
 
       ulList.appendChild(li);
