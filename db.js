@@ -284,16 +284,10 @@ function loadPagesList() {
       listNotes.appendChild(createSidebarItem(p.id, p.title));
     });
 
-    // 4. Отрисовка Тегов (ИСПРАВЛЕНО: добавили иконку 🏷️ и привязали тип tag)
+    // 4. Отрисовка Тегов (ИСПРАВЛЕНО: УБРАН ДВОЙНОЙ КЛИК)
     sortedTags.forEach(tag => {
-      const itemLi = createSidebarItem(tag, tag);
-
-      // Переопределяем клик по тегу для вызова главного конвейера
-      itemLi.onclick = function() {
-        checkAndCreatePage(tag, "tag");
-      };
-
-      listTags.appendChild(itemLi);
+      // Передаем tag и в качестве ID, и в качестве текста — без лишних надстроек .onclick!
+      listTags.appendChild(createSidebarItem(tag, tag));
     });
 
     if (sortedTags.length === 0) {
