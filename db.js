@@ -444,11 +444,18 @@ function loadBlocks() {
       }
       cursor.continue();
     } else {
-      // 1. Отрисовываем основные блоки текущей страницы
-      processAndRenderBlocks(rawBlocks);
+      // ИСПРАВЛЕНИЕ: Если мы на странице тега, не рисуем пустые дефолтные блоки,
+      // а сразу передаем управление нашему строгому поисковику!
+      const rawTitle = document.getElementById("page-title").innerText.trim();
+      const cleanTitle = rawTitle.replace(/^[a-zA-Z]{3}\.\s*/, "").trim();
+      const isTagPage = !/^\d{4}-\d{2}-\d{2}$/.test(cleanTitle) && currentPageUUID && !allCurrentDecryptedBlocks.some(b => b.pageId === currentPageUUID);
 
-      // 2. Запускаем поиск упоминаний по всей базе данных
-      renderLinkedReferences(); // Просто вызываем без передачи allDatabaseBlocks
+      if (isTagPage) {
+        renderLinkedReferences();
+      } else {
+        processAndRenderBlocks(rawBlocks);
+        renderLinkedReferences();
+      }
 
       // 3. Плавно подсвечиваем якорную строку, если был переход по ссылке
       requestAnimationFrame(function() {
@@ -460,32 +467,20 @@ function loadBlocks() {
   };
 } // Функция loadBlocks окончательно закрывается здесь!
 
-// БРОНЕБОЙНЫЙ МИНИМАЛИСТИЧНЫЙ ПОИСК СТРАНИЦ ДЛЯ ТЕГОВ
+// БРОНЕБОЙНЫЙ ВЫВОД СТРАНИЦ ТЕГОВ НАПРЯМУЮ В ОСНОВНОЙ ЭКРАН (ВМЕСТО ТОЧЕК)
 function renderLinkedReferences() {
-  const container = document.getElementById("linked-references-area");
-  if (!container) return;
-  container.innerHTML = "";
+  const mainGrid = document.getElementById("blocks-list");
+  if (!mainGrid || !currentPageUUID) return;
 
-  if (!currentPageUUID) {
-    container.style.display = "none";
-    return;
-  }
-
-  // Читаем чистый текст заголовка прямо с экрана (например, "спорт" или "идеи")
+  // Читаем чистый текст заголовка прямо с экрана
   const rawTitle = document.getElementById("page-title").innerText.trim();
-
-  // Отрезаем день недели, если он там есть (на случай журналов, хотя мы ищем теги)
   const cleanTitle = rawTitle.replace(/^[a-zA-Z]{3}\.\s*/, "").trim();
 
-  // КРИТИЧЕСКАЯ ПРОВЕРКА: Если в заголовке написана дата (ГГГГ-ММ-ДД), значит это журнал,
-  // а на журналах и обычных заметках нам список упоминаний НЕ НУЖЕН!
-  if (/^\d{4}-\d{2}-\d{2}$/.test(cleanTitle)) {
-    container.style.display = "none";
-    return;
-  }
+  // Если в заголовке дата (Журнал) или обычная заметка — мгновенно выходим,
+  // так как на обычных страницах нам этот список не нужен
+  if (/^\d{4}-\d{2}-\d{2}$/.test(cleanTitle)) return;
 
-  // Если мы попали сюда — значит, мы на 100% находимся на странице ТЕГА!
-  // Быстро открываем транзакцию и собираем абсолютно все блоки базы данных для анализа
+  // Мы точно на странице ТЕГА! Быстро сканируем базу данных
   const tx = db.transaction(["blocks"], "readonly");
   const store = tx.objectStore("blocks");
   const allBlocks = [];
@@ -500,37 +495,38 @@ function renderLinkedReferences() {
       const uniqueParentPageIds = new Set();
       const cleanSearchTag = `#${cleanTitle.toLowerCase()}`;
 
-      for (let b of allBlocks) {
-        if (b.pageId === currentPageUUID) continue;
-        try {
-          const decryptedContent = decryptTextSync(b.content); // или обычный зашифрованный контент
-          // Для надежности используем асинхронный дешифратор через промис
-          decryptText(b.content).then(decryptedContent => {
-            if (decryptedContent) {
-              const lowerBlockText = decryptedContent.toLowerCase();
-              if (lowerBlockText.includes(cleanSearchTag)) {
-                uniqueParentPageIds.add(b.pageId);
-                // Как только нашли совпадение, обновляем экран
-                renderTagPagesList(uniqueParentPageIds, container);
-              }
+      // Собираем все асинхронные промисы дешифрации в один поток
+      const promises = allBlocks.map(b => {
+        if (b.pageId === currentPageUUID) return Promise.resolve();
+        return decryptText(b.content).then(decryptedContent => {
+          if (decryptedContent) {
+            const lowerBlockText = decryptedContent.toLowerCase();
+            if (lowerBlockText.includes(cleanSearchTag)) {
+              uniqueParentPageIds.add(b.pageId);
             }
-          });
-        } catch (err) {}
-      }
+          }
+        }).catch(() => {});
+      });
+
+      // Когда абсолютно все блоки расшифрованы и проверены — выводим результат!
+      Promise.all(promises).then(() => {
+        if (uniqueParentPageIds.size > 0) {
+          // Полностью очищаем основной экран от пустых блоков и точек!
+          mainGrid.innerHTML = "";
+
+          // Строим строгие красивые плашки прямо в основном списке
+          renderStrictTagListToMainGrid(uniqueParentPageIds, mainGrid);
+        } else {
+          // Если упоминаний тега вообще нет — пишем аккуратное минималистичное уведомление
+          mainGrid.innerHTML = `<li style="list-style: none; font-style: italic; color: #acaba4; padding: 12px; pointer-events: none; font-family: 'Comfortaa', sans-serif; font-size: 14px;">Этот тег пока нигде не упомянут 🏷️</li>`;
+        }
+      });
     }
   };
 }
 
-// Вспомогательная функция вывода списка на экран
-async function renderTagPagesList(pageIdsSet, container) {
-  if (pageIdsSet.size === 0) return;
-
-  container.innerHTML = "";
-  container.style.display = "block";
-
-  const ulList = document.createElement("ul");
-  ulList.style.cssText = "list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px;";
-
+// Вспомогательная функция отрисовки плашек прямо в главный список #blocks-list
+async function renderStrictTagListToMainGrid(pageIdsSet, mainGrid) {
   const pagesTx = db.transaction(["pages"], "readonly");
   const pagesStore = pagesTx.objectStore("pages");
 
@@ -541,24 +537,29 @@ async function renderTagPagesList(pageIdsSet, container) {
 
     if (parentPage) {
       const parentTitle = await decryptText(parentPage.title);
-      const li = document.createElement("li");
-      li.style.cssText = "padding: 10px 16px; background-color: #f7f6f0; border-radius: 6px; border: 1px solid #e3e2dc; cursor: pointer; font-family: 'Comfortaa', sans-serif; font-weight: 700; font-size: 14px; color: #2b6cb0; transition: all 0.15s ease;";
 
+      // Создаем стандартный элемент li, чтобы он идеально наследовал шрифты Comfortaa
+      const li = document.createElement("li");
+      li.style.cssText = "list-style: none; margin: 8px 0; padding: 12px 18px; background-color: #f7f6f0; border-radius: 8px; border: 1px solid #e3e2dc; cursor: pointer; font-family: 'Comfortaa', sans-serif; font-weight: 700; font-size: 15px; color: #2b6cb0; transition: all 0.15s ease; box-shadow: 0 1px 3px rgba(0,0,0,0.01);";
+
+      // Красивый день недели для журналов
       li.innerText = parentPage.type === "journal" ? formatJournalTitle(parentTitle) : parentTitle;
 
+      // Элегантный Soft UI отклик при наведении мышки
       li.onmouseenter = () => { li.style.borderColor = "#1a1a1a"; li.style.backgroundColor = "#f0eee6"; };
       li.onmouseleave = () => { li.style.borderColor = "#e3e2dc"; li.style.backgroundColor = "#f7f6f0"; };
 
-      li.onclick = function() {
+      // Бесшовный переход на кликнутую страницу через главный конвейер
+      li.onclick = function(e) {
+        e.preventDefault();
+        e.stopPropagation();
         checkAndCreatePage(parentTitle, parentPage.type);
       };
 
-      ulList.appendChild(li);
+      mainGrid.appendChild(li);
     }
   }
-  container.appendChild(ulList);
 }
-
 
 // КРИСТАЛЬНО ЧИСТЫЙ И ПРОСТОЙ РЕНДЕР СТРАНИЦ ДЛЯ ТЕГОВ (БЕЗ РЕГУЛЯРОК)
 async function processAndRenderTagReferences(blocksArray, tagTitle, container) {
