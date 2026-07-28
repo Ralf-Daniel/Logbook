@@ -549,26 +549,30 @@ async function renderStrictTagListToMainGrid(pageIdsSet, mainGrid) {
       li.onmouseenter = () => { li.style.borderColor = "#1a1a1a"; li.style.backgroundColor = "#f0eee6"; };
       li.onmouseleave = () => { li.style.borderColor = "#e3e2dc"; li.style.backgroundColor = "#f7f6f0"; };
 
-      // НАДЕЖНЫЙ ПЕРЕХОД ИЗ СПИСКА ТЕГОВ С ПРИНУДИТЕЛЬНЫМ СБРОСОМ РЕЖИМА
+      // ИСПРАВЛЕННЫЙ БЕЗОПАСНЫЙ ПЕРЕХОД ИЗ СПИСКА ТЕГОВ (БЕЗ РЕШЕTOK И ДУБЛИКАТОВ)
       li.onclick = function(e) {
         e.preventDefault();
         e.stopPropagation();
 
         focusedBlockId = null;
 
+        // Очищаем заголовок от знака решетки # в начале строки, чтобы поиск в базе не промахивался!
+        const cleanTargetName = parentTitle.trim().replace(/^#+/, "").trim();
+
         // 1. Если найденная страница — это ежедневный журнал
-        if (parentPage.type === "journal" || /^\d{4}-\d{2}-\d{2}$/.test(parentTitle.trim())) {
-          checkAndCreateJournalPage(parentTitle.trim());
+        if (parentPage.type === "journal" || /^\d{4}-\d{2}-\d{2}$/.test(cleanTargetName)) {
+          checkAndCreateJournalPage(cleanTargetName);
         } else {
           // 2. Если это обычная заметка:
-          // Принудительно очищаем контейнер списков, чтобы прервать циклическую логику тегов
+          // Мгновенно тушим контейнер списков, чтобы прервать циклическую логику тегов
           const containerArea = document.getElementById("linked-references-area");
           if (containerArea) containerArea.style.display = "none";
 
-          // Вызываем наш главный, отлаженный конвейер переключения, жестко передав тип "page"!
-          checkAndCreatePage(parentTitle.trim(), "page");
+          // Пускаем чистое имя по нашему главному конвейеру
+          checkAndCreatePage(cleanTargetName, "page");
         }
       };
+
 
       mainGrid.appendChild(li);
     }
