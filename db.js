@@ -549,35 +549,26 @@ async function renderStrictTagListToMainGrid(pageIdsSet, mainGrid) {
       li.onmouseenter = () => { li.style.borderColor = "#1a1a1a"; li.style.backgroundColor = "#f0eee6"; };
       li.onmouseleave = () => { li.style.borderColor = "#e3e2dc"; li.style.backgroundColor = "#f7f6f0"; };
 
-      // УЛЬТИМАТИВНЫЙ БЕЗОПАСНЫЙ ПЕРЕХОД ПО ЧЕСТНЫМ UUID БАЗЫ ДАННЫХ
+      // НАДЕЖНЫЙ ПЕРЕХОД ИЗ СПИСКА ТЕГОВ С ПРИНУДИТЕЛЬНЫМ СБРОСОМ РЕЖИМА
       li.onclick = function(e) {
         e.preventDefault();
         e.stopPropagation();
 
         focusedBlockId = null;
 
-        // 1. Если это ежедневный журнал — пускаем по проверенному журнальному пути
+        // 1. Если найденная страница — это ежедневный журнал
         if (parentPage.type === "journal" || /^\d{4}-\d{2}-\d{2}$/.test(parentTitle.trim())) {
           checkAndCreateJournalPage(parentTitle.trim());
         } else {
-          // 2. Если это обычная заметка — открываем её НАПРЯМУЮ по её честному ID из базы,
-          // полностью минуя капризный поисковик имен checkAndCreatePage!
-          currentPageUUID = parentPageId; // Устанавливаем UUID найденной страницы
-          document.getElementById("page-title").innerText = parentTitle.trim(); // Пишем чистый заголовок
+          // 2. Если это обычная заметка:
+          // Принудительно очищаем контейнер списков, чтобы прервать циклическую логику тегов
+          const containerArea = document.getElementById("linked-references-area");
+          if (containerArea) containerArea.style.display = "none";
 
-          // Добавляем страницу в блок "Последние" в сайдбаре
-          if (!recentPages.includes(parentPageId)) {
-            recentPages.unshift(parentPageId);
-            if (recentPages.length > 5) recentPages.pop();
-          }
-
-          // Начисто загружаем блоки контента и обновляем левое меню
-          loadBlocks();
-          loadPagesList();
+          // Вызываем наш главный, отлаженный конвейер переключения, жестко передав тип "page"!
+          checkAndCreatePage(parentTitle.trim(), "page");
         }
       };
-
-
 
       mainGrid.appendChild(li);
     }
