@@ -549,12 +549,23 @@ async function renderStrictTagListToMainGrid(pageIdsSet, mainGrid) {
       li.onmouseenter = () => { li.style.borderColor = "#1a1a1a"; li.style.backgroundColor = "#f0eee6"; };
       li.onmouseleave = () => { li.style.borderColor = "#e3e2dc"; li.style.backgroundColor = "#f7f6f0"; };
 
-      // Бесшовный переход на кликнутую страницу через главный конвейер
+      // ИСПРАВЛЕННЫЙ БЕЗОПАСНЫЙ ПЕРЕХОД ИЗ СПИСКА ТЕГОВ
       li.onclick = function(e) {
         e.preventDefault();
         e.stopPropagation();
-        checkAndCreatePage(parentTitle, parentPage.type);
+
+        // Намертво сбрасываем фокусы, чтобы обнулить старые режимы тегов
+        focusedBlockId = null;
+
+        // Если найденная страница — это журнал, пускаем её по родному журнальному конвейеру
+        if (parentPage.type === "journal" || /^\d{4}-\d{2}-\d{2}$/.test(parentTitle.trim())) {
+          checkAndCreateJournalPage(parentTitle.trim());
+        } else {
+          // Если это обычная заметка — открываем её как классическую страницу
+          checkAndCreatePage(parentTitle.trim(), "page");
+        }
       };
+
 
       mainGrid.appendChild(li);
     }
