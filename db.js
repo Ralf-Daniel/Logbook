@@ -559,6 +559,10 @@ async function renderStrictTagListToMainGrid(pageIdsSet, mainGrid) {
         // Очищаем заголовок от знака решетки # в начале строки, чтобы поиск в базе не промахивался!
         const cleanTargetName = parentTitle.trim().replace(/^#+/, "").trim();
 
+        // === НАШ ТЕСТОВЫЙ ЛОГ ===
+        console.log("КЛИК ПО ПЛАШКЕ! Пытаемся открыть страницу с чистым именем:", cleanTargetName, "Оригинал был:", parentTitle);
+        // ========================
+
         // 1. Если найденная страница — это ежедневный журнал
         if (parentPage.type === "journal" || /^\d{4}-\d{2}-\d{2}$/.test(cleanTargetName)) {
           checkAndCreateJournalPage(cleanTargetName);
@@ -1348,7 +1352,14 @@ async function checkAndCreatePage(pageName, type = "page") {
   store.openCursor().onsuccess = async function(event) {
     const cursor = event.target.result;
     if (cursor) {
-      if ((await decryptText(cursor.value.title)).toLowerCase() === pageName.toLowerCase()) { foundPage = cursor.value; }
+      // ИСПРАВЛЕНИЕ В ЯДРЕ: Срезаем невидимые пробелы и хвосты (.trim()) у обоих имён перед сравнением!
+      const dbPageTitle = (await decryptText(cursor.value.title)).trim().toLowerCase();
+      const searchPageTitle = pageName.trim().toLowerCase();
+
+      if (dbPageTitle === searchPageTitle) {
+        foundPage = cursor.value;
+      }
+
       cursor.continue();
     } else {
 
