@@ -395,7 +395,7 @@ async function reorderAndSaveBlocks(blocksArray) {
   });
 }
 
-// БЫСТРАЯ ВЫГРУЗКА БЛОКОВ С АВТО-ОБНОВЛЕНИЕМ ДНЯ НЕДЕЛИ В ЗАГЛОВКЕ
+// КРИСТАЛЬНО ЧИСТАЯ ФУНКЦИЯ ЗАГРУЗКИ БЛОКОВ (БЕЗ ТЕКСТОВЫХ ЛОВУШЕК)
 function loadBlocks() {
   const blockListElement = document.getElementById("blocks-list");
   if (!blockListElement) return;
@@ -413,7 +413,7 @@ function loadBlocks() {
 
   const currentPageId = currentPageUUID;
 
-  // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Автоматически обновляем и форматируем заголовок страницы при любой загрузке!
+  // Автоматически обновляем и форматируем заголовок страницы при любой загрузке
   if (currentPageId) {
     const pageTx = db.transaction(["pages"], "readonly");
     pageTx.objectStore("pages").get(currentPageId).onsuccess = async function(e) {
@@ -422,7 +422,6 @@ function loadBlocks() {
         const clearTitle = await decryptText(pageData.title);
         const isJournalType = pageData.type === "journal" || /^\d{4}-\d{2}-\d{2}$/.test(clearTitle.trim());
 
-        // Надеваем красивую обёртку дня недели, если это журнал
         document.getElementById("page-title").innerText = isJournalType ? formatJournalTitle(clearTitle) : clearTitle;
       }
     };
@@ -444,20 +443,13 @@ function loadBlocks() {
       }
       cursor.continue();
     } else {
-      // ИСПРАВЛЕНИЕ: Если мы на странице тега, не рисуем пустые дефолтные блоки,
-      // а сразу передаем управление нашему строгому поисковику!
-      const rawTitle = document.getElementById("page-title").innerText.trim();
-      const cleanTitle = rawTitle.replace(/^[a-zA-Z]{3}\.\s*/, "").trim();
-      const isTagPage = !/^\d{4}-\d{2}-\d{2}$/.test(cleanTitle) && currentPageUUID && !allCurrentDecryptedBlocks.some(b => b.pageId === currentPageUUID);
+      // 1. Отрисовываем основные блоки текущей страницы (они выведутся ВСЕГДА!)
+      processAndRenderBlocks(rawBlocks);
 
-      if (isTagPage) {
-        renderLinkedReferences();
-      } else {
-        processAndRenderBlocks(rawBlocks);
-        renderLinkedReferences();
-      }
+      // 2. Запускаем поиск упоминаний (он сам внутри себя проверит, тип "tag" это или нет)
+      renderLinkedReferences();
 
-      // 3. Плавно подсвечиваем якорную строку, если был переход по ссылке
+      // 3. Плавно подсвечиваем якорную строку
       requestAnimationFrame(function() {
         if (typeof window.highlightAnchorBlock === 'function') {
           window.highlightAnchorBlock();
@@ -465,7 +457,7 @@ function loadBlocks() {
       });
     }
   };
-} // Функция loadBlocks окончательно закрывается здесь!
+}
 
 // БРОНЕБОЙНЫЙ ВЫВОД СТРАНИЦ ТЕГОВ НАПРЯМУЮ В ОСНОВНОЙ ЭКРАН (ВМЕСТО ТОЧЕК)
 function renderLinkedReferences() {
